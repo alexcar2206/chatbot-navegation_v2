@@ -1,6 +1,9 @@
 x.py
 yarn.lock
 .DS_Store
+# Windows Mark-of-the-Web alternate data stream leftovers
+*Zone.Identifier
+*:Zone.Identifier
 node_modules
 /build
 /.svelte-kit

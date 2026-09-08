@@ -8,6 +8,40 @@ services:
     restart: unless-stopped
     image: ollama/ollama:${OLLAMA_DOCKER_TAG-latest}
 
+  # One-shot: pull default Ollama models (see OLLAMA_PULL_MODELS / scripts/ollama-pull-defaults.sh).
+  # First boot can take several minutes; open-webui does not wait for pulls to finish.
+  ollama-init:
+    image: ollama/ollama:${OLLAMA_DOCKER_TAG-latest}
+    container_name: ollama-init
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_PULL_MODELS=${OLLAMA_PULL_MODELS:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        MODELS="$${OLLAMA_PULL_MODELS:-llama3.2:3b}"
+        MODELS=$$(echo "$$MODELS" | tr ',' ' ')
+        echo "Waiting for Ollama at $$OLLAMA_HOST..."
+        i=0
+        until ollama list >/dev/null 2>&1; do
+          i=$$((i + 1))
+          if [ "$$i" -gt 60 ]; then
+            echo "Ollama did not become ready in time" >&2
+            exit 1
+          fi
+          sleep 2
+        done
+        echo "Pulling models: $$MODELS"
+        for model in $$MODELS; do
+          [ -z "$$model" ] && continue
+          echo "=== ollama pull $$model ==="
+          ollama pull "$$model"
+        done
+        echo "Default Ollama models are ready."
+    restart: "no"
+
   open-webui:
     build:
       context: .
@@ -20,12 +54,44 @@ services:
       - ollama
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
+    env_file:
+      - .env
     environment:
       - 'OLLAMA_BASE_URL=http://ollama:11434'
       - 'WEBUI_SECRET_KEY='
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
+
+  # One-shot: download docs ZIP, create Knowledge Bases + RAG workspace model via API.
+  # Skips if SEED_DOCS_ZIP_URL is empty, marker exists, or model already present (unless SEED_FORCE).
+  # First boot can take a long time (Open WebUI startup + indexing). Reset with: docker compose down -v
+  webui-seed:
+    image: python:3.12-slim
+    container_name: webui-seed
+    depends_on:
+      - open-webui
+    env_file:
+      - .env
+    environment:
+      - WEBUI_URL=http://open-webui:8080
+      - SEED_DOCS_ZIP_URL=${SEED_DOCS_ZIP_URL:-}
+      - SEED_FORCE=${SEED_FORCE:-false}
+      - SEED_MARKER_PATH=/data/.seed_webui_complete
+      - SEED_MODEL_ID=${SEED_MODEL_ID:-asistente-navegacion-mino}
+      - SEED_BASE_MODEL_ID=${SEED_BASE_MODEL_ID:-llama3.2:3b}
+      - SEED_MODEL_NAME=${SEED_MODEL_NAME:-Asistente Navegación Miño}
+      - SEED_WAIT_TIMEOUT=${SEED_WAIT_TIMEOUT:-900}
+    volumes:
+      - open-webui:/data
+      - ./scripts/seed_webui.py:/seed/seed_webui.py:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        pip install --no-cache-dir -q requests
+        exec python /seed/seed_webui.py
+    restart: "no"
 
 volumes:
   ollama: {}

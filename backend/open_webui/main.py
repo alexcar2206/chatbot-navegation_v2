@@ -53,6 +53,7 @@ from open_webui.config import (
     ENABLE_ADMIN_EXPORT,
     ENABLE_ONEDRIVE_BUSINESS,
     ENABLE_ONEDRIVE_PERSONAL,
+    ENABLE_SIGNUP,
     # OpenAI
     ENV,
     FRONTEND_BUILD_DIR,
@@ -370,8 +371,8 @@ async def lifespan(app: FastAPI):
     # Create admin account from env vars if specified and no users exist
     if WEBUI_ADMIN_EMAIL and WEBUI_ADMIN_PASSWORD:
         if await create_admin_user(WEBUI_ADMIN_EMAIL, WEBUI_ADMIN_PASSWORD, WEBUI_ADMIN_NAME):
-            # Disable signup since we now have an admin
-            await Config.upsert({'ui.enable_signup': False})
+            # Respect ENABLE_SIGNUP so public registration can stay on after headless admin creation
+            await Config.upsert({'ui.enable_signup': ENABLE_SIGNUP})
 
     if SAFE_MODE:
         await Functions.deactivate_all_functions()
