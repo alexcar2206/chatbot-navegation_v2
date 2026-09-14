@@ -144,6 +144,7 @@ BLOB_PATH_TO_KEY = {
     'models.default_metadata': 'DEFAULT_MODEL_METADATA',
     'models.default_params': 'DEFAULT_MODEL_PARAMS',
     'notes.enable': 'ENABLE_NOTES',
+    'mapa.enable': 'ENABLE_MAPA',
     # OAuth — direct paths
     'oauth.admin_roles': 'OAUTH_ADMIN_ROLES',
     'oauth.allowed_domains': 'OAUTH_ALLOWED_DOMAINS',

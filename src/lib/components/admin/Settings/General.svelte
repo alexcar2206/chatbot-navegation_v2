@@ -302,6 +302,13 @@
 					<Switch bind:state={adminConfig.ENABLE_NOTES} ariaLabelledbyId={labelId} />
 				</AdminSettingRow>
 				<AdminSettingRow
+					label={$i18n.t('Map')}
+					description={$i18n.t('Allow users to consult navigation zones on the map.')}
+					let:labelId
+				>
+					<Switch bind:state={adminConfig.ENABLE_MAPA} ariaLabelledbyId={labelId} />
+				</AdminSettingRow>
+				<AdminSettingRow
 					label={$i18n.t('Channels')}
 					description={$i18n.t('Allow users to use channels for shared conversations.')}
 					let:labelId

@@ -82,6 +82,7 @@
 	import ClockIcon from './Sidebar/icons/Clock.svelte';
 	import CodeIcon from './Sidebar/icons/Code.svelte';
 	import EditPencilIcon from './Sidebar/icons/EditPencil.svelte';
+	import MapIcon from './Sidebar/icons/Map.svelte';
 	import NotesIcon from './Sidebar/icons/Notes.svelte';
 	import SearchIcon from './Sidebar/icons/Search.svelte';
 	import Sidebar from '../icons/Sidebar.svelte';
@@ -94,7 +95,7 @@
 	import MobileSwipePanel from '../common/MobileSwipePanel.svelte';
 
 	const BREAKPOINT = 768;
-	const DEFAULT_PINNED_ITEMS = ['notes', 'workspace'];
+	const DEFAULT_PINNED_ITEMS = ['mapa', 'notes', 'workspace'];
 
 	let scrollTop = 0;
 
@@ -152,10 +153,18 @@
 		folderRegistry[folder.id]?.setFolderItems?.();
 	};
 
-	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: pinnedItems = (() => {
+		const items = [...($settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS)];
+		if (($config?.features?.enable_mapa ?? false) && !items.includes('mapa')) {
+			items.unshift('mapa');
+		}
+		return items;
+	})();
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
+			case 'mapa':
+				return $config?.features?.enable_mapa ?? false;
 			case 'notes':
 				return (
 					($config?.features?.enable_notes ?? false) &&
@@ -189,6 +198,7 @@
 
 	const getMenuItemMeta = (id) => {
 		const items = {
+			mapa: { label: 'Map', href: '/mapa', iconType: 'mapa' },
 			notes: { label: 'Notes', href: '/notes', iconType: 'note' },
 			workspace: { label: 'Workspace', href: '/workspace', iconType: 'workspace' },
 			automations: { label: 'Automations', href: '/automations', iconType: 'automations' },
@@ -199,6 +209,7 @@
 	};
 
 	const menuItemPathPrefixes = {
+		mapa: '/mapa',
 		notes: '/notes',
 		workspace: '/workspace',
 		calendar: '/calendar',
@@ -1050,7 +1061,9 @@
 													: 'bg-black/[0.035] dark:bg-white/[0.045]'
 												: 'group-hover:bg-gray-100 dark:group-hover:bg-gray-900'}"
 										>
-											{#if itemId === 'notes'}
+											{#if itemId === 'mapa'}
+												<MapIcon className="size-4" strokeWidth="1.5" />
+											{:else if itemId === 'notes'}
 												<NotesIcon className="size-4" strokeWidth="1.5" />
 											{:else if itemId === 'workspace'}
 												<WorkspaceIcon className="size-4" strokeWidth="1.5" />
@@ -1272,7 +1285,9 @@
 											aria-label={$i18n.t(meta.label)}
 										>
 											<div class="self-center flex size-4 shrink-0 items-center justify-center">
-												{#if itemId === 'notes'}
+												{#if itemId === 'mapa'}
+													<MapIcon className="size-4" strokeWidth="1.5" />
+												{:else if itemId === 'notes'}
 													<NotesIcon className="size-4" strokeWidth="1.5" />
 												{:else if itemId === 'workspace'}
 													<WorkspaceIcon className="size-4" strokeWidth="1.5" />

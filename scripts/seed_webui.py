@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -115,6 +116,47 @@ def extract_zip(zip_path: Path, out_dir: Path) -> Path:
         # Prefer treating immediate children of out_dir as groups when multiple dirs exist.
         pass
     return out_dir
+
+
+def docs_pack_ready(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    try:
+        return any(path.iterdir())
+    except OSError:
+        return False
+
+
+def ensure_docs_pack(zip_url: str, dest: Path, force: bool = False) -> Path:
+    """Download/extract the docs ZIP into dest (shared volume) for RAG + geo GDB."""
+    if docs_pack_ready(dest) and not force:
+        log.info('docs_pack already present at %s', dest)
+        return dest
+
+    if dest.exists() and force:
+        log.info('SEED_FORCE: refreshing docs_pack at %s', dest)
+        shutil.rmtree(dest)
+
+    dest.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(prefix='webui-docs-pack-') as tmp:
+        tmp_path = Path(tmp)
+        zip_path = tmp_path / 'docs.zip'
+        extract_dir = tmp_path / 'docs'
+        extract_dir.mkdir()
+        download_zip(zip_url, zip_path)
+        extract_zip(zip_path, extract_dir)
+        for child in extract_dir.iterdir():
+            target = dest / child.name
+            if target.exists():
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            shutil.move(str(child), str(target))
+
+    log.info('Persisted docs_pack at %s', dest)
+    return dest
 
 
 def iter_doc_files(folder: Path) -> list[Path]:
@@ -271,15 +313,23 @@ def main() -> int:
     base_model_id = os.getenv('SEED_BASE_MODEL_ID', 'llama3.2:3b').strip()
     model_name = os.getenv('SEED_MODEL_NAME', 'Asistente Navegación Miño').strip()
     marker = Path(os.getenv('SEED_MARKER_PATH', '/data/.seed_webui_complete'))
+    docs_pack = Path(os.getenv('SEED_DOCS_PACK_PATH', '/data/docs_pack'))
     force = env_bool('SEED_FORCE', False)
     wait_timeout = int(os.getenv('SEED_WAIT_TIMEOUT', '900'))
+
+    # Persist pack for map geo even when RAG seed was already completed.
+    try:
+        ensure_docs_pack(zip_url, docs_pack, force=force)
+    except Exception as e:
+        log.error('docs_pack persist failed: %s', e)
+        return 1
 
     if not email or not password:
         log.error('WEBUI_ADMIN_EMAIL / WEBUI_ADMIN_PASSWORD required for seed')
         return 1
 
     if not force and marker.exists():
-        log.info('Marker %s exists — seed already done', marker)
+        log.info('Marker %s exists — RAG seed already done (docs_pack ready)', marker)
         return 0
 
     wait_for_webui(base, wait_timeout)
@@ -300,7 +350,7 @@ def main() -> int:
     s = session_with_token(token)
 
     if not force and model_exists(s, base, model_id):
-        log.info('Model %s already exists — skipping seed', model_id)
+        log.info('Model %s already exists — skipping RAG seed', model_id)
         write_marker(marker)
         return 0
 
@@ -309,53 +359,42 @@ def main() -> int:
         write_marker(marker)
         return 0
 
-    with tempfile.TemporaryDirectory(prefix='webui-seed-') as tmp:
-        tmp_path = Path(tmp)
-        zip_path = tmp_path / 'docs.zip'
-        extract_dir = tmp_path / 'docs'
-        extract_dir.mkdir()
-        try:
-            download_zip(zip_url, zip_path)
-        except Exception as e:
-            log.error('ZIP download failed: %s', e)
-            return 1
-        try:
-            extract_zip(zip_path, extract_dir)
-            groups = knowledge_groups(extract_dir)
-        except Exception as e:
-            log.error('ZIP extract / group failed: %s', e)
-            return 1
+    try:
+        groups = knowledge_groups(docs_pack)
+    except Exception as e:
+        log.error('docs_pack group failed: %s', e)
+        return 1
 
-        knowledge_items: list[dict] = []
-        for name, files in groups:
+    knowledge_items: list[dict] = []
+    for name, files in groups:
+        try:
+            kb = create_knowledge(
+                s,
+                base,
+                name=name,
+                description=f'Documentación seed: {name}',
+            )
+        except Exception as e:
+            log.error('Failed creating knowledge %s: %s', name, e)
+            return 1
+        kid = kb['id']
+        for fp in files:
             try:
-                kb = create_knowledge(
-                    s,
-                    base,
-                    name=name,
-                    description=f'Documentación seed: {name}',
-                )
+                upload_file_to_knowledge(s, base, kid, fp)
             except Exception as e:
-                log.error('Failed creating knowledge %s: %s', name, e)
+                log.error('Upload failed: %s', e)
                 return 1
-            kid = kb['id']
-            for fp in files:
-                try:
-                    upload_file_to_knowledge(s, base, kid, fp)
-                except Exception as e:
-                    log.error('Upload failed: %s', e)
-                    return 1
-            wait_pending_clear(s, base, kid)
-            knowledge_items.append({'id': kid, 'name': kb.get('name') or name})
+        wait_pending_clear(s, base, kid)
+        knowledge_items.append({'id': kid, 'name': kb.get('name') or name})
 
-        try:
-            create_model(s, base, model_id, base_model_id, model_name, knowledge_items)
-        except Exception as e:
-            log.error('Model create failed: %s', e)
-            return 1
+    try:
+        create_model(s, base, model_id, base_model_id, model_name, knowledge_items)
+    except Exception as e:
+        log.error('Model create failed: %s', e)
+        return 1
 
     write_marker(marker)
-    log.info('Seed complete: model=%s knowledge=%s', model_id, len(knowledge_items))
+    log.info('Seed complete: model=%s knowledge=%s docs_pack=%s', model_id, len(knowledge_items), docs_pack)
     return 0
 
 
