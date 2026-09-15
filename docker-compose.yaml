@@ -79,7 +79,7 @@ services:
       - SEED_FORCE=${SEED_FORCE:-false}
       - SEED_MARKER_PATH=/data/.seed_webui_complete
       - SEED_MODEL_ID=${SEED_MODEL_ID:-asistente-navegacion-mino}
-      - SEED_BASE_MODEL_ID=${SEED_BASE_MODEL_ID:-llama3.2:3b}
+      - SEED_BASE_MODEL_ID=${SEED_BASE_MODEL_ID:-openai/gpt-oss-120b}
       - SEED_MODEL_NAME=${SEED_MODEL_NAME:-Asistente Navegación Miño}
       - SEED_WAIT_TIMEOUT=${SEED_WAIT_TIMEOUT:-900}
     volumes:

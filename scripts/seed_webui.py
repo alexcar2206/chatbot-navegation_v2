@@ -294,6 +294,61 @@ def create_model(
     log.info('Model created successfully')
 
 
+def first_ollama_pull_model() -> str:
+    """First model id from OLLAMA_PULL_MODELS (space- or comma-separated)."""
+    raw = os.getenv('OLLAMA_PULL_MODELS', 'llama3.2:3b').strip()
+    parts = [p.strip() for p in raw.replace(',', ' ').split() if p.strip()]
+    return parts[0] if parts else 'llama3.2:3b'
+
+
+def ensure_model(
+    s: requests.Session,
+    base: str,
+    *,
+    model_id: str,
+    name: str,
+    access_grants: list[dict],
+    is_active: bool,
+    description: str,
+    hidden: bool = False,
+) -> None:
+    """Idempotent base-model override (base_model_id=null) for visibility / access grants.
+
+    Use meta.hidden=True (with is_active=True) to hide from the chat selector without
+    disabling the model — is_active=False removes it from the catalog and breaks
+    workspace presets that use it as base_model_id.
+    """
+    if model_exists(s, base, model_id):
+        log.info('Model %s already exists — skipping ensure', model_id)
+        return
+
+    log.info(
+        'Ensuring base model override %s (is_active=%s, hidden=%s, public=%s)',
+        model_id,
+        is_active,
+        hidden,
+        bool(access_grants),
+    )
+    body = {
+        'id': model_id,
+        'base_model_id': None,
+        'name': name,
+        'meta': {
+            'description': description,
+            'suggestion_prompts': None,
+            'tags': [],
+            'hidden': hidden,
+        },
+        'params': {},
+        'access_grants': access_grants,
+        'is_active': is_active,
+    }
+    r = s.post(f'{base}/api/v1/models/create', json=body, timeout=120)
+    if r.status_code not in (200, 201):
+        raise RuntimeError(f'models/create ensure failed for {model_id} ({r.status_code}): {r.text[:800]}')
+    log.info('Ensured model %s', model_id)
+
+
 def write_marker(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f'seeded_at={time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}\n', encoding='utf-8')
@@ -310,8 +365,9 @@ def main() -> int:
     email = os.getenv('WEBUI_ADMIN_EMAIL', '').strip()
     password = os.getenv('WEBUI_ADMIN_PASSWORD', '').strip()
     model_id = os.getenv('SEED_MODEL_ID', 'asistente-navegacion-mino').strip()
-    base_model_id = os.getenv('SEED_BASE_MODEL_ID', 'llama3.2:3b').strip()
+    base_model_id = os.getenv('SEED_BASE_MODEL_ID', 'openai/gpt-oss-120b').strip()
     model_name = os.getenv('SEED_MODEL_NAME', 'Asistente Navegación Miño').strip()
+    ollama_model_id = first_ollama_pull_model()
     marker = Path(os.getenv('SEED_MARKER_PATH', '/data/.seed_webui_complete'))
     docs_pack = Path(os.getenv('SEED_DOCS_PACK_PATH', '/data/docs_pack'))
     force = env_bool('SEED_FORCE', False)
@@ -359,6 +415,32 @@ def main() -> int:
         write_marker(marker)
         return 0
 
+    # Visibility / access for base models (must exist before assistant for user chat access).
+    try:
+        ensure_model(
+            s,
+            base,
+            model_id=base_model_id,
+            name=base_model_id,
+            access_grants=PUBLIC_READ_GRANT,
+            is_active=True,
+            hidden=True,
+            description='Public but hidden base for Asistente Navegación Miño (seed).',
+        )
+        if ollama_model_id != base_model_id:
+            ensure_model(
+                s,
+                base,
+                model_id=ollama_model_id,
+                name=ollama_model_id,
+                access_grants=[],
+                is_active=True,
+                description='Admin-only Ollama model for local testing (seed).',
+            )
+    except Exception as e:
+        log.error('Base model ensure failed: %s', e)
+        return 1
+
     try:
         groups = knowledge_groups(docs_pack)
     except Exception as e:
@@ -394,7 +476,14 @@ def main() -> int:
         return 1
 
     write_marker(marker)
-    log.info('Seed complete: model=%s knowledge=%s docs_pack=%s', model_id, len(knowledge_items), docs_pack)
+    log.info(
+        'Seed complete: model=%s base=%s ollama=%s knowledge=%s docs_pack=%s',
+        model_id,
+        base_model_id,
+        ollama_model_id,
+        len(knowledge_items),
+        docs_pack,
+    )
     return 0
 
 
