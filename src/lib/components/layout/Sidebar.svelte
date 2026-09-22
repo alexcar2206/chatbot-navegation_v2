@@ -83,6 +83,7 @@
 	import CodeIcon from './Sidebar/icons/Code.svelte';
 	import EditPencilIcon from './Sidebar/icons/EditPencil.svelte';
 	import MapIcon from './Sidebar/icons/Map.svelte';
+	import DeclarationIcon from './Sidebar/icons/Declaration.svelte';
 	import NotesIcon from './Sidebar/icons/Notes.svelte';
 	import SearchIcon from './Sidebar/icons/Search.svelte';
 	import Sidebar from '../icons/Sidebar.svelte';
@@ -95,7 +96,7 @@
 	import MobileSwipePanel from '../common/MobileSwipePanel.svelte';
 
 	const BREAKPOINT = 768;
-	const DEFAULT_PINNED_ITEMS = ['mapa', 'notes', 'workspace'];
+	const DEFAULT_PINNED_ITEMS = ['mapa', 'declaracion', 'notes', 'workspace'];
 
 	let scrollTop = 0;
 
@@ -158,6 +159,14 @@
 		if (($config?.features?.enable_mapa ?? false) && !items.includes('mapa')) {
 			items.unshift('mapa');
 		}
+		if (($config?.features?.enable_declaracion ?? false) && !items.includes('declaracion')) {
+			const mapaIdx = items.indexOf('mapa');
+			if (mapaIdx >= 0) {
+				items.splice(mapaIdx + 1, 0, 'declaracion');
+			} else {
+				items.unshift('declaracion');
+			}
+		}
 		return items;
 	})();
 
@@ -165,6 +174,8 @@
 		switch (id) {
 			case 'mapa':
 				return $config?.features?.enable_mapa ?? false;
+			case 'declaracion':
+				return $config?.features?.enable_declaracion ?? false;
 			case 'notes':
 				return (
 					($config?.features?.enable_notes ?? false) &&
@@ -199,6 +210,7 @@
 	const getMenuItemMeta = (id) => {
 		const items = {
 			mapa: { label: 'Map', href: '/mapa', iconType: 'mapa' },
+			declaracion: { label: 'Declaration', href: '/declaracion', iconType: 'declaracion' },
 			notes: { label: 'Notes', href: '/notes', iconType: 'note' },
 			workspace: { label: 'Workspace', href: '/workspace', iconType: 'workspace' },
 			automations: { label: 'Automations', href: '/automations', iconType: 'automations' },
@@ -210,6 +222,7 @@
 
 	const menuItemPathPrefixes = {
 		mapa: '/mapa',
+		declaracion: '/declaracion',
 		notes: '/notes',
 		workspace: '/workspace',
 		calendar: '/calendar',
@@ -1063,6 +1076,8 @@
 										>
 											{#if itemId === 'mapa'}
 												<MapIcon className="size-4" strokeWidth="1.5" />
+											{:else if itemId === 'declaracion'}
+												<DeclarationIcon className="size-4" strokeWidth="1.5" />
 											{:else if itemId === 'notes'}
 												<NotesIcon className="size-4" strokeWidth="1.5" />
 											{:else if itemId === 'workspace'}
@@ -1287,6 +1302,8 @@
 											<div class="self-center flex size-4 shrink-0 items-center justify-center">
 												{#if itemId === 'mapa'}
 													<MapIcon className="size-4" strokeWidth="1.5" />
+												{:else if itemId === 'declaracion'}
+													<DeclarationIcon className="size-4" strokeWidth="1.5" />
 												{:else if itemId === 'notes'}
 													<NotesIcon className="size-4" strokeWidth="1.5" />
 												{:else if itemId === 'workspace'}

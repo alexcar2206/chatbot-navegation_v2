@@ -355,6 +355,33 @@ def write_marker(path: Path) -> None:
     log.info('Wrote seed marker %s', path)
 
 
+def regenerar_navegacion(s: requests.Session, base: str) -> None:
+    """After docs_pack is on disk, rebuild geo_cache + DR plantilla (avoids lifespan race)."""
+    for path, label in (
+        ('/api/v1/mapa/regenerar', 'mapa geo'),
+        ('/api/v1/declaracion/regenerar', 'declaracion plantilla'),
+    ):
+        try:
+            r = s.post(f'{base}{path}', timeout=300)
+            if r.status_code == 403:
+                log.info('Skip %s regen (feature disabled): %s', label, r.text[:200])
+                continue
+            if r.status_code != 200:
+                log.warning('%s regen HTTP %s: %s', label, r.status_code, r.text[:500])
+                continue
+            data = r.json() if r.content else {}
+            log.info(
+                '%s regen: ok=%s available=%s action=%s msg=%s',
+                label,
+                data.get('ok'),
+                data.get('available'),
+                data.get('action'),
+                data.get('message'),
+            )
+        except requests.RequestException as e:
+            log.warning('%s regen failed: %s', label, e)
+
+
 def main() -> int:
     zip_url = os.getenv('SEED_DOCS_ZIP_URL', '').strip()
     if not zip_url:
@@ -384,10 +411,6 @@ def main() -> int:
         log.error('WEBUI_ADMIN_EMAIL / WEBUI_ADMIN_PASSWORD required for seed')
         return 1
 
-    if not force and marker.exists():
-        log.info('Marker %s exists — RAG seed already done (docs_pack ready)', marker)
-        return 0
-
     wait_for_webui(base, wait_timeout)
 
     # Admin may be created slightly after API is up
@@ -404,6 +427,13 @@ def main() -> int:
         return 1
 
     s = session_with_token(token)
+
+    # Always regen after pack is ready (open-webui lifespan often ran before the ZIP extract).
+    regenerar_navegacion(s, base)
+
+    if not force and marker.exists():
+        log.info('Marker %s exists — RAG seed already done (docs_pack + regen done)', marker)
+        return 0
 
     if not force and model_exists(s, base, model_id):
         log.info('Model %s already exists — skipping RAG seed', model_id)

@@ -309,6 +309,15 @@
 					<Switch bind:state={adminConfig.ENABLE_MAPA} ariaLabelledbyId={labelId} />
 				</AdminSettingRow>
 				<AdminSettingRow
+					label={$i18n.t('Declaration')}
+					description={$i18n.t(
+						'Allow users to generate responsible navigation declarations (DOCX).'
+					)}
+					let:labelId
+				>
+					<Switch bind:state={adminConfig.ENABLE_DECLARACION} ariaLabelledbyId={labelId} />
+				</AdminSettingRow>
+				<AdminSettingRow
 					label={$i18n.t('Channels')}
 					description={$i18n.t('Allow users to use channels for shared conversations.')}
 					let:labelId

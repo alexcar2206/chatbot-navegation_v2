@@ -163,6 +163,7 @@ from open_webui.routers import (
     models,
     notes,
     mapa,
+    declaracion,
     notifications,
     ollama,
     openai,
@@ -472,6 +473,18 @@ async def lifespan(app: FastAPI):
             log.warning('Geo cache: %s', geo_result.get('message'))
     except Exception as e:
         log.warning('Geo cache regeneration skipped/failed: %s', e)
+
+    # Declaración responsable: build Jinja plantilla from docs_pack EDITABLE DOCX
+    try:
+        from open_webui.navegacion.plantilla import regenerar_plantilla_si_cambio
+
+        dr_result = await asyncio.to_thread(regenerar_plantilla_si_cambio)
+        if dr_result.get('ok'):
+            log.info('DR plantilla: %s', dr_result.get('message'))
+        else:
+            log.warning('DR plantilla: %s', dr_result.get('message'))
+    except Exception as e:
+        log.warning('DR plantilla regeneration skipped/failed: %s', e)
 
     app.state.startup_complete = True
     await publish_event(app, EVENTS.SYSTEM_STARTUP_COMPLETED, source='system')
@@ -854,6 +867,7 @@ app.include_router(channels.router, prefix='/api/v1/channels', tags=['channels']
 app.include_router(chats.router, prefix='/api/v1/chats', tags=['chats'])
 app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 app.include_router(mapa.router, prefix='/api/v1/mapa', tags=['mapa'])
+app.include_router(declaracion.router, prefix='/api/v1/declaracion', tags=['declaracion'])
 
 
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])
@@ -2259,6 +2273,7 @@ async def get_app_config(request: Request):
         'automations.enable',
         'notes.enable',
         'mapa.enable',
+        'declaracion.enable',
         'chat.context_compaction.enable',
         'chat.tool_permissions.enable',
         'web.search.enable',
@@ -2343,6 +2358,7 @@ async def get_app_config(request: Request):
                     'enable_automations': config.get('automations.enable'),
                     'enable_notes': config.get('notes.enable'),
                     'enable_mapa': config.get('mapa.enable'),
+                    'enable_declaracion': config.get('declaracion.enable'),
                     'enable_context_compaction': config.get('chat.context_compaction.enable'),
                     'enable_tool_permissions': config.get('chat.tool_permissions.enable'),
                     'enable_web_search': config.get('web.search.enable'),

@@ -18,7 +18,7 @@ from open_webui.navegacion.geozona import (
     ruta_cache,
 )
 from open_webui.navegacion.runtime import clear_zonas_cache, get_geojson_display, get_zonas
-from open_webui.utils.auth import get_verified_user
+from open_webui.utils.auth import get_admin_user, get_verified_user
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +26,13 @@ router = APIRouter()
 
 
 async def _require_mapa_feature(user=Depends(get_verified_user)):
+    enabled = await Config.get('mapa.enable')
+    if enabled is False:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Mapa deshabilitado')
+    return user
+
+
+async def _require_mapa_admin(user=Depends(get_admin_user)):
     enabled = await Config.get('mapa.enable')
     if enabled is False:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Mapa deshabilitado')
@@ -127,3 +134,18 @@ async def mapa_highlight(
         return geojson_highlight(feature)
     except Exception as e:
         raise _http_from_geo_error(e) from e
+
+
+@router.post('/regenerar')
+async def mapa_regenerar(user=Depends(_require_mapa_admin)):
+    """Force geo_cache regen from docs_pack GDB (used by webui-seed after pack persist)."""
+    result = regenerar_geo_si_cambio()
+    clear_zonas_cache()
+    available = cache_disponible()
+    return {
+        'ok': bool(result.get('ok')) and available,
+        'available': available,
+        'action': result.get('action'),
+        'message': result.get('message'),
+        'cache_path': str(ruta_cache()),
+    }

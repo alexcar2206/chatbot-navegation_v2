@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getContext, onDestroy, onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import {
 		buscarMapaNombre,
@@ -10,6 +11,7 @@
 		getMapaStatus,
 		type MapaConsultaResult
 	} from '$lib/apis/mapa';
+	import { config } from '$lib/stores';
 
 	const i18n = getContext('i18n');
 	// Re-evaluate $i18n.t(...) when the user changes language in Settings.
@@ -36,6 +38,13 @@
 	const DEFAULT_CENTER: [number, number] = [42.4, -7.6];
 	const DEFAULT_ZOOM = 8;
 	const QUERY_ZOOM = 12;
+
+	const irADeclaracion = (opts: { embalse?: string; otros?: string }) => {
+		const params = new URLSearchParams();
+		if (opts.embalse) params.set('embalse', opts.embalse);
+		if (opts.otros) params.set('otros', opts.otros);
+		goto(`/declaracion?${params.toString()}`);
+	};
 
 	const placeMarker = (lat: number, lon: number, label?: string | null) => {
 		if (!map || !L) return;
@@ -326,6 +335,27 @@
 						</div>
 					{/if}
 				</dl>
+				{#if $config?.features?.enable_declaracion ?? false}
+					<div class="pt-2 flex flex-wrap gap-2">
+						{#if resultado.embalse_mvp}
+							<button
+								type="button"
+								class="rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-3 py-1.5 text-sm font-medium"
+								on:click={() => irADeclaracion({ embalse: resultado?.embalse_mvp || undefined })}
+							>
+								{$i18n.t('Use in declaration form')}
+							</button>
+						{:else if resultado.nombre}
+							<button
+								type="button"
+								class="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-sm"
+								on:click={() => irADeclaracion({ otros: resultado?.nombre || undefined })}
+							>
+								{$i18n.t('Use as other reservoirs')}
+							</button>
+						{/if}
+					</div>
+				{/if}
 			{/if}
 		</div>
 	{/if}
