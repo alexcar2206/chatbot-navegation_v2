@@ -1,0 +1,7 @@
+/* Brand splash overrides (Chatbot Navegation / Miño-Sil) — source of truth with src/app.html */
+#splash-screen {
+	background: #e8f1f5 !important;
+}
+html.dark #splash-screen {
+	background: #042a3a !important;
+}

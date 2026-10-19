@@ -32,7 +32,7 @@
 			name="viewport"
 			content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
 		/>
-		<meta name="theme-color" content="#171717" />
+		<meta name="theme-color" content="#0b4f6c" />
 		<meta name="robots" content="noindex,nofollow" />
 
 		<script src="/static/loader.js" defer crossorigin="use-credentials"></script>
@@ -56,23 +56,23 @@
 
 				if (localStorage.theme === 'system') {
 					document.documentElement.classList.add(prefersDarkTheme ? 'dark' : 'light');
-					metaThemeColorTag.setAttribute('content', prefersDarkTheme ? '#171717' : '#ffffff');
+					metaThemeColorTag.setAttribute('content', prefersDarkTheme ? '#0b4f6c' : '#e8f1f5');
 				} else if (localStorage.theme === 'oled-dark') {
 					document.documentElement.style.setProperty('--color-gray-800', '#101010');
 					document.documentElement.style.setProperty('--color-gray-850', '#050505');
 					document.documentElement.style.setProperty('--color-gray-900', '#000000');
 					document.documentElement.style.setProperty('--color-gray-950', '#000000');
 					document.documentElement.classList.add('dark');
-					metaThemeColorTag.setAttribute('content', '#000000');
+					metaThemeColorTag.setAttribute('content', '#042a3a');
 				} else if (localStorage.theme === 'light') {
 					document.documentElement.classList.add('light');
-					metaThemeColorTag.setAttribute('content', '#ffffff');
+					metaThemeColorTag.setAttribute('content', '#e8f1f5');
 				} else if (localStorage.theme === 'her') {
 					document.documentElement.classList.add('her');
 					metaThemeColorTag.setAttribute('content', '#983724');
 				} else {
 					document.documentElement.classList.add('dark');
-					metaThemeColorTag.setAttribute('content', '#171717');
+					metaThemeColorTag.setAttribute('content', '#0b4f6c');
 				}
 
 				// LICENSE covers these Open WebUI splash logo assets.
@@ -93,11 +93,11 @@
 						if (e.matches) {
 							document.documentElement.classList.add('dark');
 							document.documentElement.classList.remove('light');
-							metaThemeColorTag.setAttribute('content', '#171717');
+							metaThemeColorTag.setAttribute('content', '#0b4f6c');
 						} else {
 							document.documentElement.classList.add('light');
 							document.documentElement.classList.remove('dark');
-							metaThemeColorTag.setAttribute('content', '#ffffff');
+							metaThemeColorTag.setAttribute('content', '#e8f1f5');
 						}
 					}
 				});
@@ -209,11 +209,11 @@
 		}
 
 		#splash-screen {
-			background: #fff;
+			background: #e8f1f5;
 		}
 
 		html.dark #splash-screen {
-			background: #000;
+			background: #042a3a;
 		}
 
 		html.her #splash-screen {

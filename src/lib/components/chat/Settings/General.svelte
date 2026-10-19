@@ -158,18 +158,18 @@
 					? 'dark'
 					: 'light';
 				console.log('Setting system meta theme color: ' + systemTheme);
-				metaThemeColor.setAttribute('content', systemTheme === 'light' ? '#ffffff' : '#171717');
+				metaThemeColor.setAttribute('content', systemTheme === 'light' ? '#e8f1f5' : '#0b4f6c');
 			} else {
 				console.log('Setting meta theme color: ' + _theme);
 				metaThemeColor.setAttribute(
 					'content',
 					_theme === 'dark'
-						? '#171717'
+						? '#0b4f6c'
 						: _theme === 'oled-dark'
-							? '#000000'
+							? '#042a3a'
 							: _theme === 'her'
 								? '#983724'
-								: '#ffffff'
+								: '#e8f1f5'
 				);
 			}
 		}
