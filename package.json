@@ -4,6 +4,11 @@
 	"private": true,
 	"scripts": {
 		"dev": "npm run pyodide:fetch && vite dev --host",
+		"dev:docker": "bash scripts/dev-up.sh",
+		"dev:docker:seed": "bash scripts/dev-up.sh --profile seed",
+		"dev:docker:ollama": "bash scripts/dev-up.sh --profile ollama",
+		"dev:docker:full": "bash scripts/dev-up.sh --profile seed --profile ollama",
+		"dev:docker:down": "bash scripts/dev-down.sh",
 		"dev:5050": "npm run pyodide:fetch && vite dev --port 5050",
 		"build": "npm run pyodide:fetch && vite build",
 		"build:watch": "npm run pyodide:fetch && vite build --watch",

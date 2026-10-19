@@ -46,23 +46,72 @@ curl -s -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/j
 
 El ZIP de documentación alimenta: RAG (knowledge), **mapa** (GDB → geo_cache) y **declaración** (DOCX editable → plantilla).
 
-## Arranque (Docker Compose)
+## Arranque
 
-El camino recomendado es el [`docker-compose.yaml`](docker-compose.yaml) de este repo (servicios `open-webui`, `ollama`, `ollama-init`, `webui-seed`).
+Hay dos stacks Docker. Usa **desarrollo** para el día a día (hot reload) y **producción / demo** para validar el despliegue real.
+
+### Desarrollo (recomendado) — hot reload
+
+Stack: [`docker-compose.dev.yaml`](docker-compose.dev.yaml) + [`Dockerfile.dev`](Dockerfile.dev) (Vite HMR en `:5173`, uvicorn `--reload` en `:8080`). **Sin Ollama por defecto** (chat vía Groq).
+
+El asistente de workspace `asistente-navegacion-mino` usa por defecto **Groq** `openai/gpt-oss-20b` (`SEED_BASE_MODEL_ID`) con RAG reducido (`RAG_TOP_K=1`, `CHUNK_SIZE=400`) para caber mejor en el free tier (~8K TPM). El seed alinea la base del asistente a ese valor aunque el entorno ya estuviera seedado.
+
+```bash
+cp .env.dev.example .env.dev
+# Rellenar WEBUI_SECRET_KEY y OPENAI_API_KEY en .env.dev
+npm run dev:docker
+# o: ./scripts/dev-up.sh
+```
+
+- UI: [http://localhost:5173](http://localhost:5173)
+- API: [http://localhost:8080](http://localhost:8080)
+- Parar: `npm run dev:docker:down` (o `./scripts/dev-down.sh`; añade `-v` / `-- -v` para borrar volúmenes de desarrollo).
+
+Atajos npm / perfiles:
+
+```bash
+npm run dev:docker              # backend + frontend
+npm run dev:docker:seed         # + seed (docs / knowledge)
+npm run dev:docker:ollama       # + Ollama (pon ENABLE_OLLAMA_API=true en .env.dev)
+npm run dev:docker:full         # seed + Ollama
+npm run dev:docker:down         # parar todo el stack dev
+
+# Primera vez / rebuild de Dockerfile.dev (args van a up; --profile ya va bien colocado)
+npm run dev:docker:full -- --build
+# equivalente: ./scripts/dev-up.sh --build --profile seed --profile ollama
+```
+
+**Si Groq responde 429 (TPM):** abre un chat nuevo, espera ~10 s y reintenta. `RAG_TOP_K=1` aplica al reiniciar el backend; un `CHUNK_SIZE` nuevo solo afecta tras reindex (`dev:docker:down -v` + seed).
+
+**Probar el mismo asistente con Ollama local:** pon `ENABLE_OLLAMA_API=true` en `.env.dev`, arranca con `npm run dev:docker:ollama` (o `dev:docker:full`). Como **admin**, Workspace → Models → Asistente Navegación Miño → Base Model = `llama3.2:3b` (admin-only; no aparece a usuarios). Para volver a la nube, reasigna la base a `openai/gpt-oss-20b` (o re-ejecuta el seed).
+
+**PC con poca RAM (p. ej. 8 GB / sin GPU):** no uses `--profile ollama`. Limita la memoria de WSL2 si hace falta (`%UserProfile%\.wslconfig` → `memory=5GB`). El primer `docker compose build` de `Dockerfile.dev` puede tardar; los cambios de código posteriores no requieren rebuild de la imagen de producción.
+
+Tras un fallo del backend, comprueba `curl http://localhost:8080/health` antes de confiar en http://localhost:5173. Si ves “Servidor Requerido”, el frontend está bien pero la API no responde (mira `docker compose -f docker-compose.dev.yaml logs backend`).
+
+Alternativa sin Docker: `backend/dev.sh` + `npm run dev` en el host (mismo hot reload).
+
+### Producción / demo
+
+Stack: [`docker-compose.yaml`](docker-compose.yaml) (imagen completa, `ollama`, `ollama-init`, `webui-seed`).
 
 ```bash
 cp .env.example .env   # ajustar secretos si hace falta (API keys, etc.)
-docker compose build --no-cache
-docker compose up -d
+./scripts/prod-up.sh --build -d
+# o: docker compose -f docker-compose.yaml up --build -d
 ```
 
 - Interfaz: [http://localhost:3000](http://localhost:3000) (o el puerto de `OPEN_WEBUI_PORT`).
-- **Login admin (pruebas locales)** — valores por defecto de [`.env.example`](.env.example) (cámbialos si expones el servicio fuera de tu máquina):
-  - Email: `admin@chatnavegation.local`
-  - Contraseña: `chatnavegation123`
-  - Nombre: `Admin`
-- El primer arranque puede tardar: `ollama-init` descarga modelos y `webui-seed` indexa documentación / prepara `docs_pack` (usa esas mismas credenciales admin). Al terminar el seed regenera **geo_cache** y la **plantilla DR** (no hace falta reiniciar `open-webui` a mano).
-- Reset total (borra volúmenes de datos y modelos locales): `docker compose down -v`.
+- El primer arranque puede tardar: `ollama-init` descarga modelos y `webui-seed` indexa documentación / prepara `docs_pack`. Al terminar el seed regenera **geo_cache** y la **plantilla DR**.
+- Reset total: `docker compose -f docker-compose.yaml down -v`.
+
+### Login admin (pruebas locales)
+
+Valores por defecto de [`.env.example`](.env.example) / [`.env.dev.example`](.env.dev.example) (cámbialos si expones el servicio fuera de tu máquina):
+
+- Email: `admin@chatnavegation.local`
+- Contraseña: `chatnavegation123`
+- Nombre: `Admin`
 
 ## Licencia
 

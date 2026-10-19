@@ -1,0 +1,140 @@
+# Local development stack (hot reload). Not for production.
+# Usage:
+#   cp .env.dev.example .env.dev   # set WEBUI_SECRET_KEY + OPENAI_API_KEY
+#   npm run dev:docker             # or ./scripts/dev-up.sh
+#   npm run dev:docker:seed
+#   npm run dev:docker:ollama      # set ENABLE_OLLAMA_API=true in .env.dev
+#   npm run dev:docker:full -- --build
+#   npm run dev:docker:down
+# UI: http://localhost:5173  |  API: http://localhost:8080
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: chatbot-navegation-backend-dev
+    container_name: chatbot-backend-dev
+    env_file:
+      - .env.dev
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - ENV=dev
+      - CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN:-http://localhost:5173;http://localhost:8080}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - ENABLE_OLLAMA_API=${ENABLE_OLLAMA_API:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+    volumes:
+      - ./backend:/app/backend
+      # Required by open_webui.env (BASE_DIR/*); not inside ./backend mount
+      - ./CHANGELOG.md:/app/CHANGELOG.md:ro
+      - ./package.json:/app/package.json:ro
+      - open-webui-dev:/app/backend/data
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+
+  frontend:
+    image: node:22-alpine
+    container_name: chatbot-frontend-dev
+    working_dir: /app
+    environment:
+      - WEBUI_BACKEND_URL=http://backend:8080
+    volumes:
+      - .:/app
+      - node_modules_dev:/app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -x node_modules/.bin/vite ]; then
+          echo "Installing npm dependencies..."
+          npm ci --force
+        fi
+        exec npm run dev -- --host 0.0.0.0 --port 5173
+    restart: unless-stopped
+
+  # Optional: first-boot docs / knowledge / workspace model
+  webui-seed:
+    profiles: ["seed"]
+    image: python:3.12-slim
+    container_name: chatbot-webui-seed-dev
+    depends_on:
+      - backend
+    env_file:
+      - .env.dev
+    environment:
+      - WEBUI_URL=http://backend:8080
+      - SEED_DOCS_ZIP_URL=${SEED_DOCS_ZIP_URL:-}
+      - SEED_FORCE=${SEED_FORCE:-false}
+      - SEED_MARKER_PATH=/data/.seed_webui_complete
+      - SEED_MODEL_ID=${SEED_MODEL_ID:-asistente-navegacion-mino}
+      - SEED_BASE_MODEL_ID=${SEED_BASE_MODEL_ID:-openai/gpt-oss-20b}
+      - SEED_MODEL_NAME=${SEED_MODEL_NAME:-Asistente Navegación Miño}
+      - SEED_WAIT_TIMEOUT=${SEED_WAIT_TIMEOUT:-900}
+    volumes:
+      - open-webui-dev:/data
+      - ./scripts/seed_webui.py:/seed/seed_webui.py:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        pip install --no-cache-dir -q requests
+        exec python /seed/seed_webui.py
+    restart: "no"
+
+  # Optional: local LLM (heavy RAM/GPU — skip on 8GB machines)
+  ollama:
+    profiles: ["ollama"]
+    volumes:
+      - ollama-dev:/root/.ollama
+    container_name: chatbot-ollama-dev
+    pull_policy: always
+    tty: true
+    restart: unless-stopped
+    image: ollama/ollama:${OLLAMA_DOCKER_TAG:-latest}
+
+  ollama-init:
+    profiles: ["ollama"]
+    image: ollama/ollama:${OLLAMA_DOCKER_TAG:-latest}
+    container_name: chatbot-ollama-init-dev
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_PULL_MODELS=${OLLAMA_PULL_MODELS:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        MODELS="$${OLLAMA_PULL_MODELS:-llama3.2:3b}"
+        MODELS=$$(echo "$$MODELS" | tr ',' ' ')
+        echo "Waiting for Ollama at $$OLLAMA_HOST..."
+        i=0
+        until ollama list >/dev/null 2>&1; do
+          i=$$((i + 1))
+          if [ "$$i" -gt 60 ]; then
+            echo "Ollama did not become ready in time" >&2
+            exit 1
+          fi
+          sleep 2
+        done
+        echo "Pulling models: $$MODELS"
+        for model in $$MODELS; do
+          [ -z "$$model" ] && continue
+          echo "=== ollama pull $$model ==="
+          ollama pull "$$model"
+        done
+        echo "Default Ollama models are ready."
+    restart: "no"
+
+volumes:
+  open-webui-dev: {}
+  node_modules_dev: {}
+  ollama-dev: {}

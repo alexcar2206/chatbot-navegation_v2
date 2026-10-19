@@ -133,11 +133,17 @@ def signin(base: str, email: str, password: str) -> str:
     return token
 
 
-def model_exists(s: requests.Session, base: str, model_id: str) -> bool:
+def get_model(s: requests.Session, base: str, model_id: str) -> dict | None:
     r = s.get(f'{base}/api/v1/models/model', params={'id': model_id}, timeout=60)
-    if r.status_code == 200 and r.json():
-        return True
-    return False
+    if r.status_code == 200:
+        data = r.json()
+        if data:
+            return data
+    return None
+
+
+def model_exists(s: requests.Session, base: str, model_id: str) -> bool:
+    return get_model(s, base, model_id) is not None
 
 
 def download_zip(url: str, dest: Path) -> None:
@@ -394,6 +400,99 @@ def ensure_model(
     log.info('Ensured model %s', model_id)
 
 
+def ensure_base_models(
+    s: requests.Session,
+    base: str,
+    *,
+    base_model_id: str,
+    ollama_model_id: str,
+) -> None:
+    """Register Groq base (public/hidden) and Ollama base (admin-only) for the assistant."""
+    ensure_model(
+        s,
+        base,
+        model_id=base_model_id,
+        name=base_model_id,
+        access_grants=PUBLIC_READ_GRANT,
+        is_active=True,
+        hidden=True,
+        description='Public but hidden base for Asistente Navegación Miño (seed).',
+    )
+    if ollama_model_id != base_model_id:
+        ensure_model(
+            s,
+            base,
+            model_id=ollama_model_id,
+            name=ollama_model_id,
+            access_grants=[],
+            is_active=True,
+            description='Admin-only Ollama model for local testing (seed).',
+        )
+
+
+def _normalize_access_grants(grants: object) -> list[dict]:
+    if not isinstance(grants, list) or not grants:
+        return list(PUBLIC_READ_GRANT)
+    out: list[dict] = []
+    for g in grants:
+        if not isinstance(g, dict):
+            continue
+        principal_type = g.get('principal_type')
+        principal_id = g.get('principal_id')
+        if not principal_type or principal_id is None:
+            continue
+        out.append(
+            {
+                'principal_type': principal_type,
+                'principal_id': principal_id,
+                'permission': g.get('permission') or 'read',
+            }
+        )
+    return out or list(PUBLIC_READ_GRANT)
+
+
+def sync_assistant_base_model(
+    s: requests.Session,
+    base: str,
+    *,
+    model_id: str,
+    base_model_id: str,
+    model_name: str,
+) -> None:
+    """Align workspace assistant base_model_id to SEED_BASE_MODEL_ID when it already exists."""
+    existing = get_model(s, base, model_id)
+    if not existing:
+        log.info('Assistant %s not found — skip base sync', model_id)
+        return
+
+    current_base = existing.get('base_model_id')
+    if current_base == base_model_id:
+        log.info('Assistant %s already uses base %s', model_id, base_model_id)
+        return
+
+    log.info('Updating assistant %s base_model_id %s → %s', model_id, current_base, base_model_id)
+    meta = existing.get('meta') or {}
+    params = existing.get('params') or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    if not isinstance(params, dict):
+        params = {}
+
+    body = {
+        'id': model_id,
+        'base_model_id': base_model_id,
+        'name': existing.get('name') or model_name,
+        'meta': meta,
+        'params': params,
+        'access_grants': _normalize_access_grants(existing.get('access_grants')),
+        'is_active': bool(existing.get('is_active', True)),
+    }
+    r = s.post(f'{base}/api/v1/models/model/update', json=body, timeout=120)
+    if r.status_code != 200:
+        raise RuntimeError(f'models/model/update failed ({r.status_code}): {r.text[:800]}')
+    log.info('Assistant %s base synced to %s', model_id, base_model_id)
+
+
 def write_marker(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f'seeded_at={time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}\n', encoding='utf-8')
@@ -449,7 +548,7 @@ def main() -> int:
     email = os.getenv('WEBUI_ADMIN_EMAIL', '').strip()
     password = os.getenv('WEBUI_ADMIN_PASSWORD', '').strip()
     model_id = os.getenv('SEED_MODEL_ID', 'asistente-navegacion-mino').strip()
-    base_model_id = os.getenv('SEED_BASE_MODEL_ID', 'openai/gpt-oss-120b').strip()
+    base_model_id = os.getenv('SEED_BASE_MODEL_ID', 'openai/gpt-oss-20b').strip()
     model_name = os.getenv('SEED_MODEL_NAME', 'Asistente Navegación Miño').strip()
     ollama_model_id = first_ollama_pull_model()
     marker = Path(os.getenv('SEED_MARKER_PATH', '/data/.seed_webui_complete'))
@@ -494,12 +593,26 @@ def main() -> int:
     # Always regen after pack is ready (open-webui lifespan often ran before the ZIP extract).
     regenerar_navegacion(s, base)
 
+    # Always keep Groq + Ollama bases registered and assistant base aligned to env.
+    try:
+        ensure_base_models(s, base, base_model_id=base_model_id, ollama_model_id=ollama_model_id)
+        sync_assistant_base_model(
+            s,
+            base,
+            model_id=model_id,
+            base_model_id=base_model_id,
+            model_name=model_name,
+        )
+    except Exception as e:
+        log.error('Base model ensure/sync failed: %s', e)
+        return 1
+
     if not force and marker.exists():
-        log.info('Marker %s exists — RAG seed already done (docs_pack + regen done)', marker)
+        log.info('Marker %s exists — RAG seed already done (docs_pack + regen + base sync done)', marker)
         return 0
 
     if not force and model_exists(s, base, model_id):
-        log.info('Model %s already exists — skipping RAG seed', model_id)
+        log.info('Model %s already exists — skipping RAG seed (base sync done)', model_id)
         write_marker(marker)
         return 0
 
@@ -507,32 +620,6 @@ def main() -> int:
         log.info('SEED_FORCE set but model %s already exists — exiting 0 (use down -v to reset)', model_id)
         write_marker(marker)
         return 0
-
-    # Visibility / access for base models (must exist before assistant for user chat access).
-    try:
-        ensure_model(
-            s,
-            base,
-            model_id=base_model_id,
-            name=base_model_id,
-            access_grants=PUBLIC_READ_GRANT,
-            is_active=True,
-            hidden=True,
-            description='Public but hidden base for Asistente Navegación Miño (seed).',
-        )
-        if ollama_model_id != base_model_id:
-            ensure_model(
-                s,
-                base,
-                model_id=ollama_model_id,
-                name=ollama_model_id,
-                access_grants=[],
-                is_active=True,
-                description='Admin-only Ollama model for local testing (seed).',
-            )
-    except Exception as e:
-        log.error('Base model ensure failed: %s', e)
-        return 1
 
     try:
         groups = knowledge_groups(docs_pack)

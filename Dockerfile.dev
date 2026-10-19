@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1
+# Lightweight backend image for local development (docker-compose.dev.yaml).
+# Code is bind-mounted; dependencies are baked in. No frontend build, no model preloads.
+
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    ENV=dev \
+    PORT=8080 \
+    HOST=0.0.0.0 \
+    SCARF_NO_ANALYTICS=true \
+    DO_NOT_TRACK=true \
+    ANONYMIZED_TELEMETRY=false \
+    UV_LINK_MODE=copy \
+    HF_HOME=/app/backend/data/cache/embedding/models \
+    SENTENCE_TRANSFORMERS_HOME=/app/backend/data/cache/embedding/models \
+    WHISPER_MODEL_DIR=/app/backend/data/cache/whisper/models \
+    TIKTOKEN_CACHE_DIR=/app/backend/data/cache/tiktoken
+
+WORKDIR /app/backend
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      gcc \
+      g++ \
+      curl \
+      ca-certificates \
+      git \
+      python3-dev \
+      libgdal-dev \
+      gdal-bin \
+      libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt ./requirements.txt
+# Fallback when CHANGELOG is not bind-mounted (compose.dev mounts ./CHANGELOG.md → /app/CHANGELOG.md)
+COPY CHANGELOG.md /app/CHANGELOG.md
+
+RUN pip3 install --no-cache-dir uv && \
+    pip3 install 'torch<=2.9.1' torchvision torchaudio \
+      --index-url https://download.pytorch.org/whl/cpu --no-cache-dir && \
+    uv pip install --system -r requirements.txt --no-cache-dir && \
+    mkdir -p /app/backend/data
+
+EXPOSE 8080
+
+# Bind-mount supplies ./backend at runtime. --reload watches Python sources.
+CMD ["bash", "-c", "exec python -m uvicorn open_webui.main:app --host \"${HOST:-0.0.0.0}\" --port \"${PORT:-8080}\" --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-*}\" --ws-per-message-deflate \"${UVICORN_WS_PER_MESSAGE_DEFLATE:-true}\" --reload"]
