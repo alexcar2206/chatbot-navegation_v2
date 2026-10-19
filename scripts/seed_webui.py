@@ -32,6 +32,51 @@ No inventes normas, plazos, requisitos, embalses ni procedimientos.
 Cuando sea posible, indica de qué documento o apartado sale la información.
 Responde en español, de forma clara y breve."""
 
+SUGGESTION_PROMPTS = [
+    {
+        'title': ['Zonas de navegación', 'Anexo 3 / embalse'],
+        'content': (
+            '¿Qué zonas del Anexo 3 aplican en el embalse de Belesar '
+            'y qué restricciones de navegación hay según la documentación?'
+        ),
+    },
+    {
+        'title': ['Declaración responsable', 'requisitos'],
+        'content': (
+            '¿Qué datos y documentos necesito para una declaración responsable '
+            'de navegación en embalses de la demarcación Miño-Sil?'
+        ),
+    },
+    {
+        'title': ['Plazos', 'vigencia ≤ 1 año'],
+        'content': (
+            '¿Cuál es el plazo máximo de una declaración responsable para embalses '
+            '(opción ≤ 1 año) según la documentación disponible?'
+        ),
+    },
+    {
+        'title': ['Matrícula CHMS', 'formato'],
+        'content': (
+            '¿Qué formato tiene la matrícula CHMS y cuándo se considera '
+            'ya asignada según la documentación?'
+        ),
+    },
+    {
+        'title': ['Autorización', 'frente a declaración'],
+        'content': (
+            '¿Cuándo hace falta una autorización frente a una declaración responsable '
+            'para navegar en un embalse de la demarcación Miño-Sil?'
+        ),
+    },
+    {
+        'title': ['Mapa / coordenadas', 'zona autorizada'],
+        'content': (
+            '¿Cómo puedo comprobar si unas coordenadas están dentro de una zona '
+            'de navegación autorizada del Anexo 3?'
+        ),
+    },
+]
+
 DOC_SUFFIXES = {
     '.pdf',
     '.txt',
@@ -281,7 +326,7 @@ def create_model(
         'meta': {
             'description': 'Asistente RAG sobre declaraciones y normativa de navegación (seed automático).',
             'knowledge': knowledge_items,
-            'suggestion_prompts': None,
+            'suggestion_prompts': SUGGESTION_PROMPTS,
             'tags': [],
         },
         'params': {'system': SYSTEM_PROMPT},
@@ -353,6 +398,18 @@ def write_marker(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f'seeded_at={time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}\n', encoding='utf-8')
     log.info('Wrote seed marker %s', path)
+
+
+def upsert_prompt_suggestions(s: requests.Session, base: str) -> None:
+    """Persist navigation prompt chips in config (safe to run on every seed)."""
+    r = s.post(
+        f'{base}/api/v1/configs/suggestions',
+        json={'suggestions': SUGGESTION_PROMPTS},
+        timeout=60,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f'configs/suggestions failed ({r.status_code}): {r.text[:500]}')
+    log.info('Updated ui.prompt_suggestions (%s items)', len(SUGGESTION_PROMPTS))
 
 
 def regenerar_navegacion(s: requests.Session, base: str) -> None:
@@ -427,6 +484,12 @@ def main() -> int:
         return 1
 
     s = session_with_token(token)
+
+    try:
+        upsert_prompt_suggestions(s, base)
+    except Exception as e:
+        log.error('Prompt suggestions update failed: %s', e)
+        return 1
 
     # Always regen after pack is ready (open-webui lifespan often ran before the ZIP extract).
     regenerar_navegacion(s, base)

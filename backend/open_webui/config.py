@@ -1668,31 +1668,46 @@ except Exception as e:
 if default_prompt_suggestions == []:
     default_prompt_suggestions = [
         {
-            'title': ['Help me study', 'vocabulary for a college entrance exam'],
-            'content': "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the correct option.",
+            'title': ['Zonas de navegación', 'Anexo 3 / embalse'],
+            'content': (
+                '¿Qué zonas del Anexo 3 aplican en el embalse de Belesar '
+                'y qué restricciones de navegación hay según la documentación?'
+            ),
         },
         {
-            'title': ['Give me ideas', "for what to do with my kids' art"],
-            'content': "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's also so much clutter.",
+            'title': ['Declaración responsable', 'requisitos'],
+            'content': (
+                '¿Qué datos y documentos necesito para una declaración responsable '
+                'de navegación en embalses de la demarcación Miño-Sil?'
+            ),
         },
         {
-            'title': ['Tell me a fun fact', 'about the Roman Empire'],
-            'content': 'Tell me a random fun fact about the Roman Empire',
+            'title': ['Plazos', 'vigencia ≤ 1 año'],
+            'content': (
+                '¿Cuál es el plazo máximo de una declaración responsable para embalses '
+                '(opción ≤ 1 año) según la documentación disponible?'
+            ),
         },
         {
-            'title': ['Show me a code snippet', "of a website's sticky header"],
-            'content': "Show me a code snippet of a website's sticky header in CSS and JavaScript.",
+            'title': ['Matrícula CHMS', 'formato'],
+            'content': (
+                '¿Qué formato tiene la matrícula CHMS y cuándo se considera '
+                'ya asignada según la documentación?'
+            ),
         },
         {
-            'title': [
-                'Explain options trading',
-                "if I'm familiar with buying and selling stocks",
-            ],
-            'content': "Explain options trading in simple terms if I'm familiar with buying and selling stocks.",
+            'title': ['Autorización', 'frente a declaración'],
+            'content': (
+                '¿Cuándo hace falta una autorización frente a una declaración responsable '
+                'para navegar en un embalse de la demarcación Miño-Sil?'
+            ),
         },
         {
-            'title': ['Overcome procrastination', 'give me tips'],
-            'content': 'Could you start by asking me about instances when I procrastinate the most and then give me some suggestions to overcome it?',
+            'title': ['Mapa / coordenadas', 'zona autorizada'],
+            'content': (
+                '¿Cómo puedo comprobar si unas coordenadas están dentro de una zona '
+                'de navegación autorizada del Anexo 3?'
+            ),
         },
     ]
 
