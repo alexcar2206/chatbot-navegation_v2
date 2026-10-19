@@ -119,7 +119,7 @@
 	{#if loaded}
 		{#if draggedOver}
 			<div
-				class="absolute inset-0 z-50 rounded-md bg-gray-100/50 pointer-events-none touch-none dark:bg-gray-700/20"
+				class="absolute inset-0 z-50 rounded-md bg-white/10 pointer-events-none touch-none dark:bg-gray-700/20"
 			></div>
 		{/if}
 
@@ -128,7 +128,7 @@
 				<div class="flex items-center justify-between h-6 w-full pl-3.5 pr-1.5 shrink-0">
 					<button
 						type="button"
-						class="group flex flex-1 h-full items-center gap-1 text-left text-xs text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 transition-colors duration-100 {buttonClassName}"
+						class="group flex flex-1 h-full items-center gap-1 text-left text-xs text-white/50 hover:text-white/80 dark:text-gray-500 dark:hover:text-gray-400 transition-colors duration-100 {buttonClassName}"
 						aria-expanded={open}
 						aria-controls="{id}-content"
 					>
@@ -149,7 +149,7 @@
 					{#if onAdd}
 						<button
 							type="button"
-							class="flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 transition-colors duration-100"
+							class="flex items-center justify-center w-7 h-7 rounded-lg text-white/40 hover:text-white dark:text-gray-600 dark:hover:text-gray-400 transition-colors duration-100"
 							aria-label={onAddLabel}
 							on:click={(e) => {
 								e.stopPropagation();

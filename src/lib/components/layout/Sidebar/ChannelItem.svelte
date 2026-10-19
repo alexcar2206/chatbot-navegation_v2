@@ -80,12 +80,12 @@
 <div
 	id="sidebar-channel-item"
 	bind:this={itemElement}
-	class=" w-full {className} rounded-xl flex relative group hover:bg-gray-100 dark:hover:bg-gray-900 {$page
+	class=" w-full {className} rounded-xl flex relative group hover:bg-white/10 dark:hover:bg-gray-900 {$page
 		.url.pathname === `/channels/${channel.id}`
-		? 'bg-gray-100 dark:bg-gray-900 selected'
+		? 'bg-white/20 dark:bg-gray-900 selected'
 		: ''} {channel?.type === 'dm' ? 'px-1 py-[0.1875rem]' : 'p-1'}  {channel?.unread_count > 0
-		? 'font-normal dark:text-white text-black'
-		: ' dark:text-gray-400 text-gray-600'} cursor-pointer select-none"
+		? 'font-normal dark:text-white text-white'
+		: ' dark:text-gray-400 text-white/70'} cursor-pointer select-none"
 >
 	<a
 		class="min-w-0 flex flex-1"

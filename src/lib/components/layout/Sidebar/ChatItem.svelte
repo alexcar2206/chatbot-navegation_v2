@@ -139,15 +139,15 @@
 	$: chatItemClass = ` w-full flex justify-between rounded-xl px-2 py-1.5 ${
 		id === $chatId || confirmEdit
 			? ($settings?.highContrastMode ?? false)
-				? 'bg-black/[0.035] dark:bg-white/[0.06] selected'
-				: 'bg-black/[0.035] dark:bg-white/[0.045] selected'
+				? 'bg-white/20 dark:bg-white/[0.06] selected'
+				: 'bg-white/20 dark:bg-white/[0.045] selected'
 			: selected
 				? ($settings?.highContrastMode ?? false)
-					? 'bg-black/[0.035] dark:bg-white/[0.055] selected'
-					: 'bg-black/[0.035] dark:bg-white/[0.045] selected'
+					? 'bg-white/20 dark:bg-white/[0.055] selected'
+					: 'bg-white/20 dark:bg-white/[0.045] selected'
 				: $mobile
 					? ''
-					: ' hover:bg-gray-100 dark:hover:bg-gray-900 group-hover:bg-gray-100 dark:group-hover:bg-gray-900'
+					: ' hover:bg-white/10 dark:hover:bg-gray-900 group-hover:bg-white/10 dark:group-hover:bg-gray-900'
 	}  whitespace-nowrap text-ellipsis transition`;
 
 	const selectChatHandler = (event?: MouseEvent) => {
@@ -537,7 +537,7 @@
 		<div
 			dir="auto"
 			class="text-left self-center overflow-hidden w-full h-5 truncate {unread
-				? 'font-normal text-gray-800 dark:text-gray-200'
+				? 'font-normal text-white dark:text-gray-200'
 				: ''} {($mobile || showInlineActions) && !readonly ? 'pr-12' : ''}"
 		>
 			{title}
@@ -546,7 +546,7 @@
 
 	<!-- Time ago indicator -->
 	{#if (updatedAt ?? createdAt) && !showInlineActions && !($mobile && !readonly)}
-		<div class="shrink-0 self-center text-[0.625rem] text-gray-400 dark:text-gray-500 pl-2">
+		<div class="shrink-0 self-center text-[0.625rem] text-white/50 dark:text-gray-500 pl-2">
 			{formatTimeAgo((updatedAt ?? createdAt) as number)}
 		</div>
 	{/if}
@@ -603,13 +603,13 @@
 			id="sidebar-chat-item"
 			class=" w-full flex justify-between rounded-xl px-2 py-1.5 {id === $chatId || confirmEdit
 				? ($settings?.highContrastMode ?? false)
-					? 'bg-black/[0.035] dark:bg-white/[0.06] selected'
-					: 'bg-black/[0.035] dark:bg-white/[0.045] selected'
+					? 'bg-white/20 dark:bg-white/[0.06] selected'
+					: 'bg-white/20 dark:bg-white/[0.045] selected'
 				: selected
 					? ($settings?.highContrastMode ?? false)
-						? 'bg-black/[0.035] dark:bg-white/[0.055] selected'
-						: 'bg-black/[0.035] dark:bg-white/[0.045] selected'
-					: 'hover:bg-gray-100 dark:hover:bg-gray-900 group-hover:bg-gray-100 dark:group-hover:bg-gray-900'}  whitespace-nowrap text-ellipsis relative transition {generating
+						? 'bg-white/20 dark:bg-white/[0.055] selected'
+						: 'bg-white/20 dark:bg-white/[0.045] selected'
+					: 'hover:bg-white/10 dark:hover:bg-gray-900 group-hover:bg-white/10 dark:group-hover:bg-gray-900'}  whitespace-nowrap text-ellipsis relative transition {generating
 				? 'cursor-not-allowed'
 				: ''}"
 		>
