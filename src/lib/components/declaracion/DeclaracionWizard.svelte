@@ -66,20 +66,24 @@
 		const params = new URLSearchParams(
 			typeof window !== 'undefined' ? window.location.search : $page.url.search
 		);
-		const embalse = params.get('embalse')?.trim();
+		const embalses = params
+			.getAll('embalse')
+			.map((s) => s.trim())
+			.filter(Boolean);
 		const otros = params.get('otros')?.trim();
-		if (!embalse && !otros) return;
+		if (!embalses.length && !otros) return;
 
 		const next = { ...datos };
-		if (embalse) {
-			const sel = Array.isArray(next.embalses_seleccionados)
-				? [...(next.embalses_seleccionados as string[])]
-				: [];
+		const sel = Array.isArray(next.embalses_seleccionados)
+			? [...(next.embalses_seleccionados as string[])]
+			: [];
+		for (const embalse of embalses) {
 			if (!sel.includes(embalse)) sel.push(embalse);
-			next.embalses_seleccionados = sel;
 		}
+		next.embalses_seleccionados = sel;
 		if (otros) {
-			next.embalses_otros = otros;
+			const prev = String(next.embalses_otros || '').trim();
+			next.embalses_otros = prev ? `${prev}, ${otros}` : otros;
 		}
 		datos = next;
 		paso = PASO_LUGAR;

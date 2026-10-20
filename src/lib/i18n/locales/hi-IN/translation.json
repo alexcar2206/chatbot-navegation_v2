@@ -3139,5 +3139,11 @@
 	"Load": "लोड",
 	"Use in declaration form": "घोषणा फ़ॉर्म में उपयोग करें",
 	"Use as other reservoirs": "अन्य जलाशयों के रूप में उपयोग करें",
-	"Loading…": "लोड हो रहा है…"
+	"Loading…": "लोड हो रहा है…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

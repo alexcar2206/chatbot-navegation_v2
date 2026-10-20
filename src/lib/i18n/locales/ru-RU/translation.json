@@ -3167,5 +3167,11 @@
 	"Load": "Загрузить",
 	"Use in declaration form": "Использовать в форме декларации",
 	"Use as other reservoirs": "Использовать как другие водоёмы",
-	"Loading…": "Загрузка…"
+	"Loading…": "Загрузка…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

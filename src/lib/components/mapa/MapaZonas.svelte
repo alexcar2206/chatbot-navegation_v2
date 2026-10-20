@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getContext, onDestroy, onMount } from 'svelte';
+	import { getContext, onDestroy, onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -33,16 +33,67 @@
 	let latInput = '';
 	let lonInput = '';
 	let resultado: MapaConsultaResult | null = null;
+	let seleccionadas: MapaConsultaResult[] = [];
 	let querying = false;
 
 	const DEFAULT_CENTER: [number, number] = [42.4, -7.6];
 	const DEFAULT_ZOOM = 8;
 	const QUERY_ZOOM = 12;
 
-	const irADeclaracion = (opts: { embalse?: string; otros?: string }) => {
+	// Leaflet needs a resize when the side list appears/disappears and changes map width.
+	$: if (map && seleccionadas) {
+		tick().then(() => {
+			try {
+				map?.invalidateSize();
+			} catch {
+				/* empty */
+			}
+		});
+	}
+
+	const claveZona = (res: MapaConsultaResult): string | null =>
+		res.embalse_mvp || res.nombre || null;
+
+	const yaSeleccionada = (res: MapaConsultaResult): boolean => {
+		const clave = claveZona(res);
+		if (!clave) return false;
+		return seleccionadas.some((z) => claveZona(z) === clave);
+	};
+
+	const anadirASeleccion = () => {
+		if (!resultado?.encontrado) return;
+		const clave = claveZona(resultado);
+		if (!clave) return;
+		if (yaSeleccionada(resultado)) {
+			toast.info($i18n.t('Already in the selection'));
+			return;
+		}
+		seleccionadas = [...seleccionadas, resultado];
+		toast.success($i18n.t('Added to selection'));
+	};
+
+	const quitarDeSeleccion = (clave: string) => {
+		seleccionadas = seleccionadas.filter((z) => claveZona(z) !== clave);
+	};
+
+	const limpiarSeleccion = () => {
+		seleccionadas = [];
+	};
+
+	const irADeclaracion = () => {
+		if (!seleccionadas.length) return;
 		const params = new URLSearchParams();
-		if (opts.embalse) params.set('embalse', opts.embalse);
-		if (opts.otros) params.set('otros', opts.otros);
+		const otrosNombres: string[] = [];
+		for (const z of seleccionadas) {
+			if (z.embalse_mvp) {
+				params.append('embalse', z.embalse_mvp);
+			} else if (z.nombre) {
+				otrosNombres.push(z.nombre);
+			}
+		}
+		if (otrosNombres.length) {
+			params.set('otros', otrosNombres.join(', '));
+		}
 		goto(`/declaracion?${params.toString()}`);
 	};
 
@@ -299,8 +350,71 @@
 		</div>
 	{/if}
 
-	<div class="z-10 w-full rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
-		<div bind:this={mapElement} class="h-[min(60vh,560px)] w-full z-10 bg-gray-100 dark:bg-gray-900" />
+	<div class="flex flex-col lg:flex-row gap-3 w-full items-stretch">
+		{#if seleccionadas.length > 0 && ($config?.features?.enable_declaracion ?? false)}
+			<div
+				class="order-1 lg:order-2 w-full lg:w-64 shrink-0 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 text-sm flex flex-col gap-3 lg:h-[min(60vh,560px)]"
+			>
+				<div class="flex items-center justify-between gap-2 shrink-0">
+					<p class="font-medium">
+						{$i18n.t('Selected zones')} ({seleccionadas.length})
+					</p>
+					<button
+						type="button"
+						class="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 underline"
+						on:click={limpiarSeleccion}
+					>
+						{$i18n.t('Clear selection')}
+					</button>
+				</div>
+				<ul class="space-y-2 overflow-y-auto flex-1 min-h-0">
+					{#each seleccionadas as zona (claveZona(zona))}
+						{@const clave = claveZona(zona) || ''}
+						<li
+							class="flex items-center justify-between gap-2 rounded-lg bg-gray-50 dark:bg-gray-900/50 px-3 py-2"
+						>
+							<div class="min-w-0">
+								<p class="truncate font-medium">{zona.nombre || clave}</p>
+								{#if zona.embalse_mvp}
+									<p class="text-xs text-gray-500">
+										{$i18n.t('MVP reservoir')}: {zona.embalse_mvp}
+									</p>
+								{:else}
+									<p class="text-xs text-amber-700 dark:text-amber-300">
+										{$i18n.t('Use as other reservoirs')}
+									</p>
+								{/if}
+							</div>
+							<button
+								type="button"
+								class="shrink-0 rounded-lg px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800"
+								on:click={() => quitarDeSeleccion(clave)}
+							>
+								{$i18n.t('Remove')}
+							</button>
+						</li>
+					{/each}
+				</ul>
+				<div class="pt-1 shrink-0">
+					<button
+						type="button"
+						class="w-full rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-3 py-1.5 text-sm font-medium"
+						on:click={irADeclaracion}
+					>
+						{$i18n.t('Use in declaration form')}
+					</button>
+				</div>
+			</div>
+		{/if}
+
+		<div
+			class="order-2 lg:order-1 z-10 flex-1 min-w-0 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800"
+		>
+			<div
+				bind:this={mapElement}
+				class="h-[min(60vh,560px)] w-full z-10 bg-gray-100 dark:bg-gray-900"
+			/>
+		</div>
 	</div>
 
 	{#if resultado}
@@ -340,18 +454,20 @@
 						{#if resultado.embalse_mvp}
 							<button
 								type="button"
-								class="rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-3 py-1.5 text-sm font-medium"
-								on:click={() => irADeclaracion({ embalse: resultado?.embalse_mvp || undefined })}
+								class="rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+								disabled={yaSeleccionada(resultado)}
+								on:click={anadirASeleccion}
 							>
-								{$i18n.t('Use in declaration form')}
+								{$i18n.t('Add to selection')}
 							</button>
 						{:else if resultado.nombre}
 							<button
 								type="button"
-								class="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-sm"
-								on:click={() => irADeclaracion({ otros: resultado?.nombre || undefined })}
+								class="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-sm disabled:opacity-50"
+								disabled={yaSeleccionada(resultado)}
+								on:click={anadirASeleccion}
 							>
-								{$i18n.t('Use as other reservoirs')}
+								{$i18n.t('Add as other reservoirs')}
 							</button>
 						{/if}
 					</div>

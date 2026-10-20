@@ -3125,5 +3125,11 @@
 	"Load": "โหลด",
 	"Use in declaration form": "ใช้ในแบบฟอร์มประกาศ",
 	"Use as other reservoirs": "ใช้เป็นอ่างเก็บน้ำอื่น",
-	"Loading…": "กำลังโหลด…"
+	"Loading…": "กำลังโหลด…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

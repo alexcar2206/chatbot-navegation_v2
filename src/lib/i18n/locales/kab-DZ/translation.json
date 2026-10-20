@@ -3139,5 +3139,11 @@
 	"Load": "Sali-d",
 	"Use in declaration form": "Seqdec deg tferkit n usmel",
 	"Use as other reservoirs": "Seqdec am iswiren n waman-nniḍen",
-	"Loading…": "Tettali-d…"
+	"Loading…": "Tettali-d…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

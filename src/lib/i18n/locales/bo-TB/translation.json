@@ -3125,5 +3125,11 @@
 	"Load": "མངོན།",
 	"Use in declaration form": "གསལ་བསྒྲགས་འབྲི་ཤོག་ནང་བེད་སྤྱོད།",
 	"Use as other reservoirs": "ཆུ་མཛོད་གཞན་པ་ལྟར་བེད་སྤྱོད།",
-	"Loading…": "མངོན་བཞིན་ཡོད…"
+	"Loading…": "མངོན་བཞིན་ཡོད…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

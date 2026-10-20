@@ -3139,5 +3139,11 @@
 	"Load": "Зареди",
 	"Use in declaration form": "Използвай във формуляра за декларация",
 	"Use as other reservoirs": "Използвай като други резервоари",
-	"Loading…": "Зареждане…"
+	"Loading…": "Зареждане…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

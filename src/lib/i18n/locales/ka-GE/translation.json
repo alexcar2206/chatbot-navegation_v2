@@ -3139,5 +3139,11 @@
 	"Load": "ჩატვირთვა",
 	"Use in declaration form": "გამოყენება დეკლარაციის ფორმაში",
 	"Use as other reservoirs": "გამოყენება სხვა რეზერვუარებად",
-	"Loading…": "ჩატვირთვა…"
+	"Loading…": "ჩატვირთვა…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

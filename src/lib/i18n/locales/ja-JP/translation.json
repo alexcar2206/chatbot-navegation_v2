@@ -3125,5 +3125,11 @@
 	"Load": "読み込み",
 	"Use in declaration form": "申告フォームで使用",
 	"Use as other reservoirs": "その他の貯水池として使用",
-	"Loading…": "読み込み中…"
+	"Loading…": "読み込み中…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }

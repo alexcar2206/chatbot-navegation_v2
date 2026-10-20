@@ -3139,5 +3139,11 @@
 	"Load": "Yüklə",
 	"Use in declaration form": "Bəyannamə formasında istifadə et",
 	"Use as other reservoirs": "Digər su anbarları kimi istifadə et",
-	"Loading…": "Yüklənir…"
+	"Loading…": "Yüklənir…",
+	"Add to selection": "Add to selection",
+	"Add as other reservoirs": "Add as other reservoirs",
+	"Selected zones": "Selected zones",
+	"Clear selection": "Clear selection",
+	"Already in the selection": "Already in the selection",
+	"Added to selection": "Added to selection"
 }
