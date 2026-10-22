@@ -11,7 +11,8 @@
 		getMapaStatus,
 		type MapaConsultaResult
 	} from '$lib/apis/mapa';
-	import { config } from '$lib/stores';
+	import { config, user } from '$lib/stores';
+	import { featureNavegacionDisponible } from '$lib/utils/navegacion';
 
 	const i18n = getContext('i18n');
 	// Re-evaluate $i18n.t(...) when the user changes language in Settings.
@@ -351,7 +352,7 @@
 	{/if}
 
 	<div class="flex flex-col lg:flex-row gap-3 w-full items-stretch">
-		{#if seleccionadas.length > 0 && ($config?.features?.enable_declaracion ?? false)}
+		{#if seleccionadas.length > 0 && featureNavegacionDisponible($config, $user, 'declaracion')}
 			<div
 				class="order-1 lg:order-2 w-full lg:w-64 shrink-0 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 text-sm flex flex-col gap-3 lg:h-[min(60vh,560px)]"
 			>
@@ -449,7 +450,7 @@
 						</div>
 					{/if}
 				</dl>
-				{#if $config?.features?.enable_declaracion ?? false}
+				{#if featureNavegacionDisponible($config, $user, 'declaracion')}
 					<div class="pt-2 flex flex-wrap gap-2">
 						{#if resultado.embalse_mvp}
 							<button

@@ -994,6 +994,38 @@
 		<div class="flex flex-col w-full">
 			<div class="flex w-full justify-between my-1">
 				<div class=" self-center text-xs font-normal">
+					{$i18n.t('Map')}
+				</div>
+				<Switch bind:state={permissions.features.mapa} ariaLabel={$i18n.t('Map')} />
+			</div>
+			{#if defaultPermissions?.features?.mapa && !permissions.features.mapa}
+				<div>
+					<div class="text-xs text-gray-500">
+						{$i18n.t('This is a default user permission and will remain enabled.')}
+					</div>
+				</div>
+			{/if}
+		</div>
+
+		<div class="flex flex-col w-full">
+			<div class="flex w-full justify-between my-1">
+				<div class=" self-center text-xs font-normal">
+					{$i18n.t('Declaration')}
+				</div>
+				<Switch bind:state={permissions.features.declaracion} ariaLabel={$i18n.t('Declaration')} />
+			</div>
+			{#if defaultPermissions?.features?.declaracion && !permissions.features.declaracion}
+				<div>
+					<div class="text-xs text-gray-500">
+						{$i18n.t('This is a default user permission and will remain enabled.')}
+					</div>
+				</div>
+			{/if}
+		</div>
+
+		<div class="flex flex-col w-full">
+			<div class="flex w-full justify-between my-1">
+				<div class=" self-center text-xs font-normal">
 					{$i18n.t('Channels')}
 				</div>
 				<Switch bind:state={permissions.features.channels} ariaLabel={$i18n.t('Channels')} />

@@ -2,8 +2,9 @@ import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 export type DeclaracionStatus = {
 	available: boolean;
-	plantilla_path: string;
-	editable_path: string;
+	/** Only returned to admins. */
+	plantilla_path?: string;
+	editable_path?: string;
 	limitaciones_mvp: string;
 	total_pasos: number;
 	total_pasos_datos: number;

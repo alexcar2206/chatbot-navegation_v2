@@ -8,6 +8,7 @@
 	import { getLogoutRedirectUrl, getSessionUser, userSignOut } from '$lib/apis/auths';
 
 	import { showSettings, mobile, showSidebar, user, config, settings } from '$lib/stores';
+	import { featureNavegacionDisponible } from '$lib/utils/navegacion';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
@@ -283,7 +284,7 @@
 				</div>
 			{/if}
 
-			{#if $config?.features?.enable_mapa ?? false}
+			{#if featureNavegacionDisponible($config, $user, 'mapa')}
 				<div class="flex items-center w-full">
 					<a
 						href="/mapa"
@@ -327,7 +328,7 @@
 				</div>
 			{/if}
 
-			{#if $config?.features?.enable_declaracion ?? false}
+			{#if featureNavegacionDisponible($config, $user, 'declaracion')}
 				<div class="flex items-center w-full">
 					<a
 						href="/declaracion"
