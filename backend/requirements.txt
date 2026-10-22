@@ -145,6 +145,8 @@ colbert-ai==0.2.22
 ## Geo / navigation map (Anexo 3 zones)
 geopandas>=1.0.0
 pyogrio>=0.7.0
+# Cross-process lock for geo_cache / plantilla regeneration (navegacion/_fs.py)
+filelock>=3.12.0
 
 ## LDAP
 ldap3==2.9.1

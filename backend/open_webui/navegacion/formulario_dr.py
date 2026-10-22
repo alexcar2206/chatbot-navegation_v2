@@ -680,9 +680,25 @@ def letra_documento(documento: str) -> str:
     return ''
 
 
+_SEPARADORES_MATRICULA = re.compile(r'[\s\-_./]')
+_PATRON_MATRICULA = re.compile(r'CHMS(\d{3})([A-Z])(\d{3})', re.ASCII)
+
+
+def normalizar_matricula(matricula: str) -> str:
+    """Devuelve la matrícula en formato canónico ``CHMS-123-X-001`` o ``''`` si no es válida.
+
+    Solo se toleran separadores habituales; cualquier otro carácter la invalida
+    (así no se imprime en el documento algo distinto de lo validado).
+    """
+    limpio = _SEPARADORES_MATRICULA.sub('', matricula or '').upper()
+    coincidencia = _PATRON_MATRICULA.fullmatch(limpio)
+    if not coincidencia:
+        return ''
+    return SEPARADOR_MATRICULA.join(['CHMS', *coincidencia.groups()])
+
+
 def matricula_valida(matricula: str) -> bool:
-    limpio = re.sub(r'[^0-9A-Za-z]', '', (matricula or '')).upper()
-    return bool(re.fullmatch(r'CHMS\d{3}[A-Z]\d{3}', limpio))
+    return bool(normalizar_matricula(matricula))
 
 
 def calcular_matricula(documento: str, correlativo: int = CORRELATIVO_MIN) -> str:
@@ -705,7 +721,7 @@ def calcular_matricula(documento: str, correlativo: int = CORRELATIVO_MIN) -> st
 
 def matricula_efectiva(datos: dict) -> str:
     if datos.get('embarcacion_declarada_antes') == EMBARCACION_YA_DECLARADA:
-        return (datos.get('embarcacion_matricula') or '').strip()
+        return normalizar_matricula(str(datos.get('embarcacion_matricula') or ''))
     try:
         return calcular_matricula(
             str(datos.get('declarante_dni') or ''),

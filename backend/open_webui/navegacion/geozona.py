@@ -20,6 +20,7 @@ import geopandas as gpd
 from shapely.geometry import Point
 
 from open_webui.env import DATA_DIR
+from open_webui.navegacion._fs import escribir_json_atomico, escritura_atomica, lock_regeneracion
 from open_webui.navegacion.constants import EMBALSES_OPCION_A
 
 log = logging.getLogger(__name__)
@@ -166,12 +167,7 @@ def cargar_metadata_geo(cache_path: Path | None = None) -> dict | None:
 
 
 def guardar_metadata_geo(cache_path: Path, metadata: dict) -> None:
-    meta_path = ruta_metadata(cache_path)
-    meta_path.parent.mkdir(parents=True, exist_ok=True)
-    meta_path.write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False),
-        encoding='utf-8',
-    )
+    escribir_json_atomico(ruta_metadata(cache_path), metadata)
 
 
 def _huella_coincide(actual: dict, guardada: dict) -> bool:
@@ -340,8 +336,8 @@ def exportar_geodata(
     )
     gdf = gdf_proj.to_crs(epsg=4326)
 
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    gdf.to_file(destino, driver='GeoJSON')
+    with escritura_atomica(destino) as tmp:
+        gdf.to_file(tmp, driver='GeoJSON')
 
     meta = {
         **huella_gdb(gdb, layer=capa_elegida),
@@ -656,17 +652,20 @@ def regenerar_geo_si_cambio() -> dict:
         log.warning(msg)
         return {'ok': False, 'action': 'missing', 'message': msg, 'cache': str(cache)}
 
-    if modo == 'auto' and not necesita_regenerar_geo(gdb, cache):
-        msg = f'Sin cambios en el .gdb; {cache.parent}/ está actualizado.'
-        log.info(msg)
-        return {'ok': True, 'action': 'up_to_date', 'message': msg, 'cache': str(cache)}
+    # Varios workers pueden arrancar a la vez: solo uno exporta; el resto vuelve
+    # a comprobar la huella tras obtener el lock y encuentra el cache al día.
+    with lock_regeneracion('geo_cache'):
+        if modo == 'auto' and not necesita_regenerar_geo(gdb, cache):
+            msg = f'Sin cambios en el .gdb; {cache.parent}/ está actualizado.'
+            log.info(msg)
+            return {'ok': True, 'action': 'up_to_date', 'message': msg, 'cache': str(cache)}
 
-    try:
-        destino = exportar_geodata(gdb_path=gdb, cache_path=cache)
-    except Exception as exc:
-        msg = f'No se pudo regenerar geo_cache/: {exc}'
-        log.exception(msg)
-        return {'ok': False, 'action': 'error', 'message': msg, 'cache': str(cache)}
+        try:
+            destino = exportar_geodata(gdb_path=gdb, cache_path=cache)
+        except Exception as exc:
+            msg = f'No se pudo regenerar geo_cache/: {exc}'
+            log.exception(msg)
+            return {'ok': False, 'action': 'error', 'message': msg, 'cache': str(cache)}
 
     msg = f'GeoJSON generado en {destino}'
     log.info(msg)

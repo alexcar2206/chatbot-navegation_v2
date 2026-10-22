@@ -64,7 +64,7 @@ def _http_from_geo_error(exc: Exception) -> HTTPException:
 
 
 @router.get('/status')
-async def mapa_status(user=Depends(_require_mapa_feature)):
+def mapa_status(user=Depends(_require_mapa_feature)):
     available = cache_disponible()
     if not available:
         try:
@@ -79,7 +79,7 @@ async def mapa_status(user=Depends(_require_mapa_feature)):
 
 
 @router.get('/nombres')
-async def mapa_nombres(user=Depends(_require_mapa_feature)):
+def mapa_nombres(user=Depends(_require_mapa_feature)):
     _ensure_geo_ready()
     try:
         nombres = listar_nombres_zonas(get_zonas())
@@ -89,7 +89,7 @@ async def mapa_nombres(user=Depends(_require_mapa_feature)):
 
 
 @router.get('/geojson')
-async def mapa_geojson(user=Depends(_require_mapa_feature)):
+def mapa_geojson(user=Depends(_require_mapa_feature)):
     _ensure_geo_ready()
     try:
         return get_geojson_display()
@@ -98,7 +98,7 @@ async def mapa_geojson(user=Depends(_require_mapa_feature)):
 
 
 @router.get('/consulta')
-async def mapa_consulta(
+def mapa_consulta(
     lat: float = Query(..., description='Latitud WGS84'),
     lon: float = Query(..., description='Longitud WGS84'),
     user=Depends(_require_mapa_feature),
@@ -111,7 +111,7 @@ async def mapa_consulta(
 
 
 @router.get('/buscar')
-async def mapa_buscar(
+def mapa_buscar(
     q: str = Query(..., min_length=1, description='Nombre de embalse o zona'),
     user=Depends(_require_mapa_feature),
 ):
@@ -123,7 +123,7 @@ async def mapa_buscar(
 
 
 @router.get('/highlight')
-async def mapa_highlight(
+def mapa_highlight(
     nombre: Optional[str] = Query(None, description='Nombre de zona a resaltar'),
     user=Depends(_require_mapa_feature),
 ):
@@ -137,7 +137,7 @@ async def mapa_highlight(
 
 
 @router.post('/regenerar')
-async def mapa_regenerar(user=Depends(_require_mapa_admin)):
+def mapa_regenerar(user=Depends(_require_mapa_admin)):
     """Force geo_cache regen from docs_pack GDB (used by webui-seed after pack persist)."""
     result = regenerar_geo_si_cambio()
     clear_zonas_cache()

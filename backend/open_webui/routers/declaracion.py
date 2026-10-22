@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -79,7 +80,7 @@ def _ensure_plantilla_ready() -> None:
 
 
 @router.get('/status')
-async def declaracion_status(user=Depends(_require_declaracion_feature)):
+def declaracion_status(user=Depends(_require_declaracion_feature)):
     available = plantilla_disponible()
     if not available:
         try:
@@ -99,7 +100,7 @@ async def declaracion_status(user=Depends(_require_declaracion_feature)):
 
 
 @router.get('/schema')
-async def declaracion_schema(user=Depends(_require_declaracion_feature)):
+def declaracion_schema(user=Depends(_require_declaracion_feature)):
     pasos = schema_pasos()
     return {
         'pasos': [
@@ -120,7 +121,7 @@ async def declaracion_schema(user=Depends(_require_declaracion_feature)):
 
 
 @router.post('/validar-paso')
-async def declaracion_validar_paso(
+def declaracion_validar_paso(
     body: ValidarPasoBody,
     user=Depends(_require_declaracion_feature),
 ):
@@ -137,7 +138,7 @@ async def declaracion_validar_paso(
 
 
 @router.post('/validar')
-async def declaracion_validar(
+def declaracion_validar(
     body: DatosBody,
     user=Depends(_require_declaracion_feature),
 ):
@@ -146,7 +147,7 @@ async def declaracion_validar(
 
 
 @router.post('/generar')
-async def declaracion_generar(
+def declaracion_generar(
     body: DatosBody,
     user=Depends(_require_declaracion_feature),
 ):
@@ -173,12 +174,12 @@ async def declaracion_generar(
         ) from exc
 
     filename = nombre_archivo_descarga(body.datos)
-    headers = {'Content-Disposition': f'attachment; filename="{filename}"'}
+    headers = {'Content-Disposition': f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"}
     return StreamingResponse(buffer, media_type=DOCX_MEDIA, headers=headers)
 
 
 @router.post('/regenerar')
-async def declaracion_regenerar(user=Depends(_require_declaracion_admin)):
+def declaracion_regenerar(user=Depends(_require_declaracion_admin)):
     """Force plantilla regen from docs_pack EDITABLE DOCX (used by webui-seed)."""
     result = regenerar_plantilla_si_cambio()
     available = plantilla_disponible()
