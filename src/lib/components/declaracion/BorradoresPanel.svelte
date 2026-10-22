@@ -23,6 +23,8 @@
 
 	let lista: BorradorEntrada[] = [];
 	let nombre = '';
+	/** Draft currently being edited (loaded or last saved); "Save" updates it in place. */
+	let borradorActivoId: string | null = null;
 
 	$: userId = $user?.id ?? '';
 	$: canWrite = Boolean(userId);
@@ -39,11 +41,13 @@
 		nombre = nombreBorradorSugerido(datos);
 	});
 
-	const guardar = () => {
+	const guardar = (comoNuevo = false) => {
 		if (!userId) return;
 		try {
+			const existente =
+				!comoNuevo && borradorActivoId && lista.some((b) => b.id === borradorActivoId);
 			const entrada: BorradorEntrada = {
-				id: nuevoId(),
+				id: existente ? (borradorActivoId as string) : nuevoId(),
 				nombre: (nombre || '').trim() || nombreBorradorSugerido(datos),
 				actualizado: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
 				dr_paso: paso,
@@ -51,6 +55,7 @@
 			};
 			lista = upsertBorrador(lista, entrada);
 			escribirBorradores(userId, lista);
+			borradorActivoId = entrada.id;
 			toast.success($i18n.t('Draft saved'));
 			refresh();
 		} catch (e: any) {
@@ -63,6 +68,8 @@
 	};
 
 	const cargar = (entrada: BorradorEntrada) => {
+		borradorActivoId = entrada.id;
+		nombre = entrada.nombre;
 		onCargar(entrada);
 		toast.success($i18n.t('Draft loaded'));
 	};
@@ -71,6 +78,7 @@
 		if (!userId) return;
 		lista = eliminarBorrador(lista, id);
 		escribirBorradores(userId, lista);
+		if (borradorActivoId === id) borradorActivoId = null;
 		toast.success($i18n.t('Draft deleted'));
 	};
 </script>
@@ -93,11 +101,25 @@
 			type="button"
 			class="rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-3 py-2 text-sm font-medium disabled:opacity-40"
 			disabled={!canWrite}
-			on:click={guardar}
+			on:click={() => guardar()}
 		>
 			{$i18n.t('Save draft')}
 		</button>
+		{#if borradorActivoId}
+			<button
+				type="button"
+				class="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm disabled:opacity-40"
+				disabled={!canWrite}
+				on:click={() => guardar(true)}
+			>
+				{$i18n.t('Save as new draft')}
+			</button>
+		{/if}
 	</div>
+
+	<p class="text-xs text-amber-700 dark:text-amber-300">
+		{$i18n.t('Drafts are stored only in this browser and include personal data.')}
+	</p>
 
 	{#if lista.length === 0}
 		<p class="text-xs text-gray-500">{$i18n.t('No drafts saved in this browser yet.')}</p>
