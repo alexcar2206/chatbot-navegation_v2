@@ -80,6 +80,7 @@ services:
     environment:
       - WEBUI_URL=http://open-webui:8080
       - SEED_DOCS_ZIP_URL=${SEED_DOCS_ZIP_URL:-}
+      - SEED_DOCS_ZIP_SHA256=${SEED_DOCS_ZIP_SHA256:-}
       - SEED_FORCE=${SEED_FORCE:-false}
       - SEED_MARKER_PATH=/data/.seed_webui_complete
       - SEED_MODEL_ID=${SEED_MODEL_ID:-asistente-navegacion-mino}
