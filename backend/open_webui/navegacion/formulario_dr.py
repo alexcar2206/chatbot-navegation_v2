@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import re
 from calendar import monthrange
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from open_webui.navegacion.constants import EMBALSES_OPCION_A
@@ -486,7 +486,7 @@ def _parse_fecha(valor: Any) -> Any:
 
 
 def normalizar_datos(datos: dict | None) -> dict:
-    """Copia profunda con fechas ISO convertidas a ``date``."""
+    """Copia profunda con fechas ISO convertidas a ``date``. Idempotente."""
     resultado = copy.deepcopy(datos or {})
     for clave in CAMPOS_FECHA:
         if clave in resultado:
@@ -510,89 +510,188 @@ def schema_pasos() -> list[dict]:
     return copy.deepcopy(PASOS)
 
 
-def validar_paso(indice_paso: int, datos: dict) -> list[str]:
-    errores: list[str] = []
-    datos = normalizar_datos(datos)
+# --- Errores de validación -------------------------------------------------
+# Cada error es serializable: ``codigo`` es la plantilla en español (y a la vez
+# la clave i18n del frontend), ``params`` sus valores y ``mensaje`` el texto ya
+# interpolado, útil para clientes sin i18n (curl, logs).
 
-    for campo in campos_paso(indice_paso, datos):
-        valor = datos.get(campo['clave'])
-        vacio = valor is None or (isinstance(valor, (str, list)) and len(valor) == 0)
-        if campo.get('obligatorio') and vacio:
-            errores.append(f'«{campo["etiqueta"]}» es obligatorio.')
-            continue
+ErrorValidacion = dict[str, Any]
 
-        opciones = campo.get('opciones') or []
-        tipo = campo.get('tipo')
-        if tipo == 'select' and not vacio and opciones and valor not in opciones:
-            errores.append(
-                f'«{campo["etiqueta"]}» tiene un valor no permitido: {valor}.'
-            )
-        elif tipo == 'multiselect' and isinstance(valor, list) and opciones:
-            invalidos = [item for item in valor if item not in opciones]
-            if invalidos:
-                errores.append(
-                    f'«{campo["etiqueta"]}» contiene valores no permitidos: '
-                    f'{", ".join(str(v) for v in invalidos)}.'
-                )
+E_OBLIGATORIO = '«{{campo}}» es obligatorio.'
+E_TIPO_TEXTO = '«{{campo}}» debe ser un texto.'
+E_LONGITUD = '«{{campo}}» no puede superar {{max}} caracteres.'
+E_VALOR_NO_PERMITIDO = '«{{campo}}» tiene un valor no permitido: {{valor}}.'
+E_VALORES_NO_PERMITIDOS = '«{{campo}}» contiene valores no permitidos: {{valores}}.'
+E_TIPO_LISTA = '«{{campo}}» debe ser una lista de opciones.'
+E_FECHA_INVALIDA = '«{{campo}}» no es una fecha válida.'
+E_NUMERO_INVALIDO = '«{{campo}}» debe ser un número entero.'
+E_NUMERO_RANGO = '«{{campo}}» debe estar entre {{min}} y {{max}}.'
+E_CHECKBOX = '«{{campo}}» debe marcarse o desmarcarse.'
+E_EMAIL = 'El correo electrónico del declarante no parece válido.'
+E_DNI_DECLARANTE = 'La letra del DNI/NIE no coincide con el número. Revisa el documento.'
+E_DNI_FIRMA = 'La letra del DNI/NIE de quien firma no coincide con el número. Revisa el documento.'
+E_MATRICULA_FORMATO = 'La matrícula debe tener el formato CHMS-123-X-001.'
+E_SEGURO_ORDEN = 'La vigencia del seguro «desde» debe ser anterior a «hasta».'
+E_PLAZO_ORDEN = 'La fecha «desde» del plazo debe ser anterior a la fecha «hasta».'
+E_PLAZO_MAX_ANIO = 'El plazo no puede superar un año (como máximo hasta el {{limite}}).'
+E_ANIO_FORMATO = 'El año del plazo debe tener 4 dígitos (por ejemplo {{ejemplo}}).'
+E_ANIO_RANGO = 'El año del plazo debe ser {{min}} o {{max}}.'
+E_MATRICULA_INDETERMINADA = (
+    'No se pudo determinar la matrícula de la embarcación. '
+    'Revisa el documento y los datos de la embarcación.'
+)
+E_SEGURO_COBERTURA = (
+    'El seguro (del {{desde}} al {{hasta}}) no cubre todo el plazo declarado. Sin cubrir: {{tramos}}.'
+)
 
-    if indice_paso == 1:
-        email = datos.get('declarante_email', '')
-        if email and not PATRON_EMAIL.match(str(email)):
-            errores.append('El correo electrónico del declarante no parece válido.')
-        documento = datos.get('declarante_dni', '')
-        if documento and documento_valido(str(documento)) is False:
-            errores.append(
-                'La letra del DNI/NIE no coincide con el número. Revisa el documento.'
-            )
+MAX_LONGITUD_TEXTO = 500
 
-    if indice_paso == 2:
-        if datos.get('embarcacion_declarada_antes') == EMBARCACION_YA_DECLARADA:
-            matricula = datos.get('embarcacion_matricula', '')
-            if matricula and not matricula_valida(str(matricula)):
-                errores.append('La matrícula debe tener el formato CHMS-123-X-001.')
-        else:
-            correlativo = datos.get('embarcacion_correlativo')
-            try:
-                numero = int(correlativo) if correlativo not in (None, '') else None
-            except (TypeError, ValueError):
-                numero = None
-                errores.append('El nº correlativo de la embarcación debe ser un número.')
-            if numero is not None and not (CORRELATIVO_MIN <= numero <= CORRELATIVO_MAX):
-                errores.append(
-                    f'El nº correlativo de la embarcación debe estar entre '
-                    f'{CORRELATIVO_MIN} y {CORRELATIVO_MAX}.'
-                )
 
-    if indice_paso == 3:
-        desde, hasta = datos.get('seguro_vigencia_desde'), datos.get('seguro_vigencia_hasta')
-        if isinstance(desde, date) and isinstance(hasta, date) and desde > hasta:
-            errores.append('La vigencia del seguro «desde» debe ser anterior a «hasta».')
+def _error(codigo: str, **params: Any) -> ErrorValidacion:
+    params_str = {clave: str(valor) for clave, valor in params.items()}
+    mensaje = codigo
+    for clave, valor in params_str.items():
+        mensaje = mensaje.replace('{{' + clave + '}}', valor)
+    return {'codigo': codigo, 'params': params_str, 'mensaje': mensaje}
 
-    if indice_paso == 6:
-        if datos.get('plazo_modalidad') == 'Fechas concretas':
-            desde, hasta = datos.get('plazo_fecha_desde'), datos.get('plazo_fecha_hasta')
-            if isinstance(desde, date) and isinstance(hasta, date) and desde > hasta:
-                errores.append(
-                    'La fecha «desde» del plazo debe ser anterior a la fecha «hasta».'
-                )
+
+def _hoy() -> date:
+    return date.today()
+
+
+def _sumar_un_anio(fecha: date) -> date:
+    try:
+        return fecha.replace(year=fecha.year + 1)
+    except ValueError:  # 29 de febrero
+        return fecha.replace(year=fecha.year + 1, day=28)
+
+
+def _fmt(fecha: date) -> str:
+    return fecha.strftime('%d/%m/%Y')
+
+
+def _es_vacio(valor: Any) -> bool:
+    if valor is None or valor == OPCION_VACIA:
+        return True
+    if isinstance(valor, str):
+        return not valor.strip()
+    if isinstance(valor, list):
+        return len(valor) == 0
+    return False
+
+
+def _validar_campo(campo: dict, valor: Any) -> ErrorValidacion | None:
+    """Validación genérica según ``tipo`` del esquema. ``valor`` ya normalizado."""
+    etiqueta = campo['etiqueta']
+    tipo = campo.get('tipo')
+    opciones = campo.get('opciones') or []
+
+    if _es_vacio(valor):
+        return _error(E_OBLIGATORIO, campo=etiqueta) if campo.get('obligatorio') else None
+
+    if tipo in ('texto', 'select'):
+        if not isinstance(valor, str):
+            return _error(E_TIPO_TEXTO, campo=etiqueta)
+        if len(valor) > MAX_LONGITUD_TEXTO:
+            return _error(E_LONGITUD, campo=etiqueta, max=MAX_LONGITUD_TEXTO)
+        if tipo == 'select' and opciones and valor not in opciones:
+            return _error(E_VALOR_NO_PERMITIDO, campo=etiqueta, valor=valor)
+    elif tipo == 'multiselect':
+        if not isinstance(valor, list) or not all(isinstance(item, str) for item in valor):
+            return _error(E_TIPO_LISTA, campo=etiqueta)
+        invalidos = [item for item in valor if opciones and item not in opciones]
+        if invalidos:
+            return _error(E_VALORES_NO_PERMITIDOS, campo=etiqueta, valores=', '.join(invalidos))
+    elif tipo == 'fecha':
+        if not isinstance(valor, date):
+            return _error(E_FECHA_INVALIDA, campo=etiqueta)
+    elif tipo == 'numero':
+        if isinstance(valor, bool):
+            return _error(E_NUMERO_INVALIDO, campo=etiqueta)
+        try:
+            numero = int(valor)
+        except (TypeError, ValueError):
+            return _error(E_NUMERO_INVALIDO, campo=etiqueta)
+        if isinstance(valor, float) and not valor.is_integer():
+            return _error(E_NUMERO_INVALIDO, campo=etiqueta)
+        minimo, maximo = campo.get('minimo'), campo.get('maximo')
+        if (minimo is not None and numero < minimo) or (maximo is not None and numero > maximo):
+            return _error(E_NUMERO_RANGO, campo=etiqueta, min=minimo, max=maximo)
+    elif tipo == 'checkbox':
+        if not isinstance(valor, bool):
+            return _error(E_CHECKBOX, campo=etiqueta)
+    return None
+
+
+def _validar_plazo(datos: dict) -> list[ErrorValidacion]:
+    errores: list[ErrorValidacion] = []
+    modalidad = datos.get('plazo_modalidad')
+
+    if modalidad == 'Fechas concretas':
+        desde, hasta = datos.get('plazo_fecha_desde'), datos.get('plazo_fecha_hasta')
+        if isinstance(desde, date) and isinstance(hasta, date):
+            limite = _sumar_un_anio(desde) - timedelta(days=1)
+            if desde > hasta:
+                errores.append(_error(E_PLAZO_ORDEN))
+            elif hasta > limite:
+                errores.append(_error(E_PLAZO_MAX_ANIO, limite=_fmt(limite)))
+
+    if modalidad in ('Todo el año', 'Meses concretos'):
         anio = re.sub(r'\D', '', str(datos.get('plazo_anio') or ''))
-        if datos.get('plazo_modalidad') in ('Todo el año', 'Meses concretos') and anio:
-            if len(anio) != 4:
-                errores.append('El año del plazo debe tener 4 dígitos (por ejemplo 2026).')
-
-    if indice_paso == TOTAL_PASOS_DATOS:
-        firma_dni = datos.get('firma_dni', '')
-        if firma_dni and documento_valido(str(firma_dni)) is False:
-            errores.append(
-                'La letra del DNI/NIE de quien firma no coincide con el número. '
-                'Revisa el documento.'
-            )
+        actual = _hoy().year
+        if anio and len(anio) != 4:
+            errores.append(_error(E_ANIO_FORMATO, ejemplo=actual))
+        elif anio and not (actual <= int(anio) <= actual + 1):
+            errores.append(_error(E_ANIO_RANGO, min=actual, max=actual + 1))
 
     return errores
 
 
-def intervalos_plazo(datos: dict) -> list[tuple[date, date]]:
-    datos = normalizar_datos(datos)
+def _validar_paso(indice_paso: int, datos: dict) -> list[ErrorValidacion]:
+    """Igual que ``validar_paso`` pero con ``datos`` ya normalizados."""
+    errores: list[ErrorValidacion] = []
+    visibles = campos_paso(indice_paso, datos)
+    claves = {campo['clave'] for campo in visibles}
+
+    for campo in visibles:
+        error = _validar_campo(campo, datos.get(campo['clave']))
+        if error:
+            errores.append(error)
+
+    # Reglas cruzadas: se activan según los campos que contiene el paso, no por
+    # su número, para que reordenar PASOS no las rompa.
+    email = datos.get('declarante_email')
+    if 'declarante_email' in claves and isinstance(email, str) and email and not PATRON_EMAIL.match(email):
+        errores.append(_error(E_EMAIL))
+
+    documento = datos.get('declarante_dni')
+    if 'declarante_dni' in claves and isinstance(documento, str) and documento_valido(documento) is False:
+        errores.append(_error(E_DNI_DECLARANTE))
+
+    matricula = datos.get('embarcacion_matricula')
+    if 'embarcacion_matricula' in claves and isinstance(matricula, str) and matricula and not matricula_valida(matricula):
+        errores.append(_error(E_MATRICULA_FORMATO))
+
+    if {'seguro_vigencia_desde', 'seguro_vigencia_hasta'} <= claves:
+        desde, hasta = datos.get('seguro_vigencia_desde'), datos.get('seguro_vigencia_hasta')
+        if isinstance(desde, date) and isinstance(hasta, date) and desde > hasta:
+            errores.append(_error(E_SEGURO_ORDEN))
+
+    if 'plazo_modalidad' in claves:
+        errores.extend(_validar_plazo(datos))
+
+    firma_dni = datos.get('firma_dni')
+    if 'firma_dni' in claves and isinstance(firma_dni, str) and documento_valido(firma_dni) is False:
+        errores.append(_error(E_DNI_FIRMA))
+
+    return errores
+
+
+def validar_paso(indice_paso: int, datos: dict) -> list[ErrorValidacion]:
+    return _validar_paso(indice_paso, normalizar_datos(datos))
+
+
+def _intervalos_plazo(datos: dict) -> list[tuple[date, date]]:
     modalidad = datos.get('plazo_modalidad')
 
     if modalidad == 'Fechas concretas':
@@ -610,47 +709,39 @@ def intervalos_plazo(datos: dict) -> list[tuple[date, date]]:
         return [(date(anio, 1, 1), date(anio, 12, 31))]
 
     if modalidad == 'Meses concretos':
-        meses = [MESES.index(m) + 1 for m in (datos.get('plazo_meses') or []) if m in MESES]
-        return [
-            (date(anio, mes, 1), date(anio, mes, monthrange(anio, mes)[1]))
-            for mes in sorted(meses)
-        ]
+        plazo_meses = datos.get('plazo_meses')
+        meses = [MESES.index(m) + 1 for m in (plazo_meses if isinstance(plazo_meses, list) else []) if m in MESES]
+        return [(date(anio, mes, 1), date(anio, mes, monthrange(anio, mes)[1])) for mes in sorted(meses)]
 
     return []
 
 
-def validar_global(datos: dict) -> list[str]:
-    errores: list[str] = []
+def intervalos_plazo(datos: dict) -> list[tuple[date, date]]:
+    return _intervalos_plazo(normalizar_datos(datos))
+
+
+def validar_global(datos: dict) -> list[ErrorValidacion]:
+    errores: list[ErrorValidacion] = []
     datos = normalizar_datos(datos)
 
     for indice in range(1, TOTAL_PASOS_DATOS + 1):
-        errores.extend(validar_paso(indice, datos))
+        errores.extend(_validar_paso(indice, datos))
 
     if not matricula_efectiva(datos):
-        errores.append(
-            'No se pudo determinar la matrícula de la embarcación. '
-            'Revisa el documento y los datos de la embarcación.'
-        )
+        errores.append(_error(E_MATRICULA_INDETERMINADA))
 
     desde = datos.get('seguro_vigencia_desde')
     hasta = datos.get('seguro_vigencia_hasta')
     if not (isinstance(desde, date) and isinstance(hasta, date)):
+        # Ya reportado por la validación de campos (obligatorio / fecha inválida).
         return errores
 
-    sin_cubrir = [
-        (inicio, fin)
-        for inicio, fin in intervalos_plazo(datos)
-        if inicio < desde or fin > hasta
-    ]
+    sin_cubrir = [(inicio, fin) for inicio, fin in _intervalos_plazo(datos) if inicio < desde or fin > hasta]
     if sin_cubrir:
-        tramos = ', '.join(
-            f'{inicio:%d/%m/%Y} a {fin:%d/%m/%Y}' for inicio, fin in sin_cubrir[:3]
-        )
-        resto = ', ...' if len(sin_cubrir) > 3 else ''
-        errores.append(
-            f'El seguro (del {desde:%d/%m/%Y} al {hasta:%d/%m/%Y}) no cubre '
-            f'todo el plazo declarado. Sin cubrir: {tramos}{resto}.'
-        )
+        tramos = ', '.join(f'{_fmt(inicio)} a {_fmt(fin)}' for inicio, fin in sin_cubrir[:3])
+        if len(sin_cubrir) > 3:
+            tramos += ', ...'
+        errores.append(_error(E_SEGURO_COBERTURA, desde=_fmt(desde), hasta=_fmt(hasta), tramos=tramos))
 
     return errores
 
