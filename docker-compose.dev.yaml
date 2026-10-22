@@ -25,8 +25,13 @@ services:
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
       - ENABLE_OLLAMA_API=${ENABLE_OLLAMA_API:-false}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      # config.py empties STATIC_DIR on startup and refills it from FRONTEND_BUILD_DIR/static.
+      # Keep both outside the ./backend bind mount so the repo's static files are never deleted.
+      - STATIC_DIR=/app/static-runtime
+      - FRONTEND_BUILD_DIR=/app/frontend-src
     volumes:
       - ./backend:/app/backend
+      - ./static/static:/app/frontend-src/static:ro
       # Required by open_webui.env (BASE_DIR/*); not inside ./backend mount
       - ./CHANGELOG.md:/app/CHANGELOG.md:ro
       - ./package.json:/app/package.json:ro
