@@ -26,6 +26,7 @@
 	let highlightLayer: any = null;
 	let markerLayer: any = null;
 	let zonasGeojson: any = null;
+	let destroyed = false;
 
 	let loading = true;
 	let errorMsg = '';
@@ -104,9 +105,9 @@
 			map.removeLayer(markerLayer);
 			markerLayer = null;
 		}
-		markerLayer = L.marker([lat, lon])
-			.bindPopup(label || `${lat.toFixed(5)}, ${lon.toFixed(5)}`)
-			.addTo(map);
+		const popup = document.createElement('div');
+		popup.textContent = label || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+		markerLayer = L.marker([lat, lon]).bindPopup(popup).addTo(map);
 	};
 
 	const clearHighlight = () => {
@@ -203,9 +204,11 @@
 	};
 
 	const onConsultarCoords = async () => {
-		const lat = Number(latInput);
-		const lon = Number(lonInput);
-		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+		const latTxt = String(latInput ?? '').trim();
+		const lonTxt = String(lonInput ?? '').trim();
+		const lat = Number(latTxt);
+		const lon = Number(lonTxt);
+		if (!latTxt || !lonTxt || !Number.isFinite(lat) || !Number.isFinite(lon)) {
 			toast.error($i18n.t('Enter valid latitude and longitude (EPSG:4326)'));
 			return;
 		}
@@ -229,6 +232,7 @@
 	onMount(async () => {
 		try {
 			const status = await getMapaStatus(token);
+			if (destroyed) return;
 			if (!status?.available) {
 				errorMsg = $i18n.t(
 					'The map is not available yet. Wait for the docs pack seed and geo_cache generation.'
@@ -241,11 +245,13 @@
 				getMapaNombres(token),
 				getMapaGeojson(token)
 			]);
+			if (destroyed) return;
 			nombres = listaNombres;
 			zonasGeojson = geojson;
 
 			const leafletMod = await import('leaflet');
 			await import('leaflet/dist/leaflet.css');
+			if (destroyed || !mapElement) return;
 			L = leafletMod.default;
 
 			map = L.map(mapElement).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
@@ -280,6 +286,7 @@
 	});
 
 	onDestroy(() => {
+		destroyed = true;
 		if (map) {
 			map.remove();
 			map = null;

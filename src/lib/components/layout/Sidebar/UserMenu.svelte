@@ -16,6 +16,7 @@
 	import DropdownMenu from '$lib/components/common/DropdownMenu.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import UserStatusModal from './UserStatusModal.svelte';
+	import FeatureMenuLink from './FeatureMenuLink.svelte';
 	import Emoji from '$lib/components/common/Emoji.svelte';
 	import CalendarIcon from './icons/Calendar.svelte';
 	import ClockIcon from './icons/Clock.svelte';
@@ -285,91 +286,29 @@
 			{/if}
 
 			{#if featureNavegacionDisponible($config, $user, 'mapa')}
-				<div class="flex items-center w-full">
-					<a
-						href="/mapa"
-						draggable="false"
-						class="flex flex-1 h-[1.6875rem] items-center gap-2 rounded-xl px-2 text-[0.8125rem] hover:bg-gray-100 dark:hover:bg-gray-900 transition cursor-pointer select-none"
-						on:click={async (e) => {
-							if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-							e.preventDefault();
-							show = false;
-							goto('/mapa');
-							if ($mobile) {
-								await tick();
-								showSidebar.set(false);
-							}
-						}}
-					>
-						<div class="self-center">
-							<MapIcon className="size-3.5" strokeWidth="1.5" />
-						</div>
-						<div class="self-center truncate">{$i18n.t('Map')}</div>
-					</a>
-					{#if shiftKey}
-						<Tooltip
-							content={isPinned('mapa')
-								? $i18n.t('Unpin from Sidebar')
-								: $i18n.t('Pin to Sidebar')}
-						>
-							<button
-								type="button"
-								class="p-1 mr-1 rounded-lg hover:bg-gray-100/60 dark:hover:bg-gray-700/60 transition"
-								on:click|preventDefault|stopPropagation={() => togglePin('mapa')}
-							>
-								{#if isPinned('mapa')}
-									<PinSlashIcon className="size-3.5" strokeWidth="1.5" />
-								{:else}
-									<PinIcon className="size-3.5" strokeWidth="1.5" />
-								{/if}
-							</button>
-						</Tooltip>
-					{/if}
-				</div>
+				<FeatureMenuLink
+					href="/mapa"
+					label={$i18n.t('Map')}
+					icon={MapIcon}
+					pinId="mapa"
+					pinned={pinnedItems.includes('mapa')}
+					showPin={shiftKey}
+					on:navigate={() => (show = false)}
+					on:togglePin={(e) => togglePin(e.detail)}
+				/>
 			{/if}
 
 			{#if featureNavegacionDisponible($config, $user, 'declaracion')}
-				<div class="flex items-center w-full">
-					<a
-						href="/declaracion"
-						draggable="false"
-						class="flex flex-1 h-[1.6875rem] items-center gap-2 rounded-xl px-2 text-[0.8125rem] hover:bg-gray-100 dark:hover:bg-gray-900 transition cursor-pointer select-none"
-						on:click={async (e) => {
-							if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-							e.preventDefault();
-							show = false;
-							goto('/declaracion');
-							if ($mobile) {
-								await tick();
-								showSidebar.set(false);
-							}
-						}}
-					>
-						<div class="self-center">
-							<DeclarationIcon className="size-3.5" strokeWidth="1.5" />
-						</div>
-						<div class="self-center truncate">{$i18n.t('Declaration')}</div>
-					</a>
-					{#if shiftKey}
-						<Tooltip
-							content={isPinned('declaracion')
-								? $i18n.t('Unpin from Sidebar')
-								: $i18n.t('Pin to Sidebar')}
-						>
-							<button
-								type="button"
-								class="p-1 mr-1 rounded-lg hover:bg-gray-100/60 dark:hover:bg-gray-700/60 transition"
-								on:click|preventDefault|stopPropagation={() => togglePin('declaracion')}
-							>
-								{#if isPinned('declaracion')}
-									<PinSlashIcon className="size-3.5" strokeWidth="1.5" />
-								{:else}
-									<PinIcon className="size-3.5" strokeWidth="1.5" />
-								{/if}
-							</button>
-						</Tooltip>
-					{/if}
-				</div>
+				<FeatureMenuLink
+					href="/declaracion"
+					label={$i18n.t('Declaration')}
+					icon={DeclarationIcon}
+					pinId="declaracion"
+					pinned={pinnedItems.includes('declaracion')}
+					showPin={shiftKey}
+					on:navigate={() => (show = false)}
+					on:togglePin={(e) => togglePin(e.detail)}
+				/>
 			{/if}
 
 			{#if ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}

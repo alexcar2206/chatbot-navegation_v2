@@ -155,21 +155,7 @@
 		folderRegistry[folder.id]?.setFolderItems?.();
 	};
 
-	$: pinnedItems = (() => {
-		const items = [...($settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS)];
-		if (featureNavegacionDisponible($config, $user, 'mapa') && !items.includes('mapa')) {
-			items.unshift('mapa');
-		}
-		if (featureNavegacionDisponible($config, $user, 'declaracion') && !items.includes('declaracion')) {
-			const mapaIdx = items.indexOf('mapa');
-			if (mapaIdx >= 0) {
-				items.splice(mapaIdx + 1, 0, 'declaracion');
-			} else {
-				items.unshift('declaracion');
-			}
-		}
-		return items;
-	})();
+	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
