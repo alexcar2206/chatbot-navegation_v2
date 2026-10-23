@@ -114,36 +114,29 @@ def expr_casilla(condicion: str) -> str:
     return f"{{{{ '{MARCA_SI}' if {condicion} else '{MARCA_NO}' }}}}"
 
 
-def append_text(paragraph, text):
+def _nuevo_run_con_formato(paragraph, text, *, vaciar: bool = False):
+    """Añade un run con la fuente del primer run existente; opcionalmente vacía antes el párrafo."""
     ref_run = paragraph.runs[0] if paragraph.runs else None
+    if vaciar:
+        for run in list(paragraph.runs):
+            run._element.getparent().remove(run._element)
     run = paragraph.add_run(text)
     if ref_run is not None:
         run.font.name = ref_run.font.name
         run.font.size = ref_run.font.size
     return run
+
+
+def append_text(paragraph, text):
+    return _nuevo_run_con_formato(paragraph, text)
 
 
 def set_cell_text(cell, text):
-    paragraph = cell.paragraphs[0]
-    ref_run = paragraph.runs[0] if paragraph.runs else None
-    for run in list(paragraph.runs):
-        run._element.getparent().remove(run._element)
-    run = paragraph.add_run(text)
-    if ref_run is not None:
-        run.font.name = ref_run.font.name
-        run.font.size = ref_run.font.size
-    return run
+    return _nuevo_run_con_formato(cell.paragraphs[0], text, vaciar=True)
 
 
 def replace_paragraph_text(paragraph, text):
-    ref_run = paragraph.runs[0] if paragraph.runs else None
-    for run in list(paragraph.runs):
-        run._element.getparent().remove(run._element)
-    run = paragraph.add_run(text)
-    if ref_run is not None:
-        run.font.name = ref_run.font.name
-        run.font.size = ref_run.font.size
-    return run
+    return _nuevo_run_con_formato(paragraph, text, vaciar=True)
 
 
 def forzar_fuente(run_element, nombre):
@@ -446,6 +439,11 @@ def build_plantilla(
 
     dias_runs = list(dias_especificos_p.runs)
     start_idx = 6
+    if len(dias_runs) <= start_idx:
+        raise RuntimeError(
+            f"Se esperaban al menos {start_idx + 1} runs en 'DÍAS ESPECÍFICOS', "
+            f'se encontraron {len(dias_runs)}: {dias_especificos_p.text!r}'
+        )
     dias_runs[start_idx].text = (
         "{% if plazo_modalidad == 'Fechas concretas' %}"
         '{{ plazo_fecha_desde }} al {{ plazo_fecha_hasta }}'

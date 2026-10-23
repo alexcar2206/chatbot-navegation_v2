@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import unicodedata
@@ -17,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 from shapely.geometry import Point
 
 from open_webui.env import DATA_DIR
@@ -33,8 +35,10 @@ DEFAULT_GDB_RELATIVE = (
 )
 DEFAULT_CACHE_PATH = DATA_DIR / 'geo_cache' / 'zonas_navegacion.geojson'
 
-METADATA_VERSION = 2
+METADATA_VERSION = 3
 SIMPLIFY_TOLERANCE_M = 1.0
+# El Anexo 3 viene en ETRS89 / UTM 29N (Galicia); se usa también para medir y simplificar.
+CRS_ORIGEN_POR_DEFECTO = 'EPSG:25829'
 CRS_METRICO = 25829
 
 COLUMNAS_NOMBRE = (
@@ -123,17 +127,6 @@ def _sha256_archivo(ruta: Path) -> str:
     return digest.hexdigest()
 
 
-def _capa_para_huella(gdb: Path, layer: str | None = None) -> str:
-    geo_capa_env = os.getenv('GEO_CAPA_ZONAS', '').strip()
-    if layer:
-        return layer
-    if geo_capa_env:
-        return geo_capa_env
-    if _parece_file_geodatabase(gdb):
-        return detectar_capa_zonas(gdb)
-    return ''
-
-
 def huella_gdb(
     gdb_path: Path | None = None,
     *,
@@ -144,7 +137,7 @@ def huella_gdb(
     se reutiliza su sha256 en vez de volver a leerlo entero."""
     gdb = resolver_ruta_gdb(gdb_path) if gdb_path is not None else ruta_gdb()
     geo_capa_env = os.getenv('GEO_CAPA_ZONAS', '').strip()
-    capa = _capa_para_huella(gdb, layer=layer)
+    capa = detectar_capa_zonas(gdb, capa_forzada=layer)
     files_previos = (previa or {}).get('files') or {}
     files: dict[str, dict] = {}
 
@@ -253,11 +246,16 @@ def embalse_en_lista_mvp(nombre: str | None) -> str | None:
     return _indice_embalses_mvp().get(clave)
 
 
+def _es_nulo(valor) -> bool:
+    """None, NaN, NaT o pd.NA (solo escalares; listas/arrays no cuentan como nulos)."""
+    return valor is None or (pd.api.types.is_scalar(valor) and bool(pd.isna(valor)))
+
+
 def _nombre_desde_fila(fila: gpd.GeoSeries) -> str | None:
     for columna in COLUMNAS_NOMBRE:
         if columna in fila.index:
             valor = fila[columna]
-            if valor is not None and str(valor).strip():
+            if not _es_nulo(valor) and str(valor).strip():
                 return str(valor).strip()
     for columna, valor in fila.items():
         if columna == 'geometry':
@@ -293,12 +291,16 @@ def _es_poligono(geom_tipo: str | None) -> bool:
 
 
 def detectar_capa_zonas(gdb_path: Path, capa_forzada: str | None = None) -> str:
+    """Capa forzada > GEO_CAPA_ZONAS > autodetección. '' si la ruta no es un .gdb."""
     if capa_forzada:
         return capa_forzada
 
     capa_env = os.getenv('GEO_CAPA_ZONAS', '').strip()
     if capa_env:
         return capa_env
+
+    if not _parece_file_geodatabase(gdb_path):
+        return ''
 
     capas = _listar_capas(gdb_path)
     if not capas:
@@ -313,9 +315,7 @@ def detectar_capa_zonas(gdb_path: Path, capa_forzada: str | None = None) -> str:
             if 'ZONA' in upper or 'NAVEG' in upper or 'EMBALS' in upper:
                 candidatas.append(nombre)
 
-    if len(candidatas) == 1:
-        return candidatas[0]
-    if len(candidatas) > 1:
+    if candidatas:
         return candidatas[0]
     if len(poligonales) == 1:
         return poligonales[0]
@@ -352,11 +352,11 @@ def exportar_geodata(
         raise RuntimeError(f"La capa '{capa_elegida}' no contiene geometrías.")
 
     if gdf.crs is None:
-        gdf = gdf.set_crs('EPSG:25829')
+        gdf = gdf.set_crs(CRS_ORIGEN_POR_DEFECTO)
     if gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
 
-    gdf_proj = gdf.to_crs(epsg=25830)
+    gdf_proj = gdf.to_crs(epsg=CRS_METRICO)
     gdf_proj = gdf_proj.copy()
     gdf_proj['geometry'] = gdf_proj.geometry.simplify(
         tolerance=SIMPLIFY_TOLERANCE_M,
@@ -427,7 +427,7 @@ def geojson_para_mapa(gdf: gpd.GeoDataFrame, tolerancia_m: float = 25.0) -> dict
     if gdf.empty:
         return json.loads(gdf.to_json())
 
-    gdf_proj = gdf.to_crs(epsg=25830).copy()
+    gdf_proj = gdf.to_crs(epsg=CRS_METRICO).copy()
     gdf_proj['geometry'] = gdf_proj.geometry.simplify(tolerance=tolerancia_m, preserve_topology=True)
     gdf_display = gdf_proj.to_crs(epsg=4326)
     return json.loads(gdf_display.to_json())
@@ -487,17 +487,17 @@ def _resultado_vacio(
 
 def _sanitize_attr_value(valor):
     """Convert attribute values to JSON-friendly Python scalars."""
-    if valor is None:
+    if _es_nulo(valor):
         return None
-    if hasattr(valor, 'item'):
+    if hasattr(valor, 'item') and not isinstance(valor, (str, bytes)):
         try:
             valor = valor.item()
         except (ValueError, AttributeError):
             pass
+    if isinstance(valor, (bytes, bytearray)) or hasattr(valor, 'geom_type'):
+        return None
     if isinstance(valor, float):
-        if valor != valor or valor in (float('inf'), float('-inf')):  # NaN / inf
-            return None
-        return float(valor)
+        return valor if math.isfinite(valor) else None
     if isinstance(valor, (bool, int, str)):
         return valor
     if hasattr(valor, 'isoformat'):
@@ -505,25 +505,6 @@ def _sanitize_attr_value(valor):
             return valor.isoformat()
         except Exception:
             return str(valor)
-    try:
-        import math
-
-        if isinstance(valor, (int, float)) or (
-            hasattr(valor, '__float__') and not isinstance(valor, (str, bytes, bool))
-        ):
-            fval = float(valor)
-            if math.isnan(fval) or math.isinf(fval):
-                return None
-    except (TypeError, ValueError):
-        pass
-    if isinstance(valor, (bytes, bytearray)):
-        return None
-    try:
-        # Reject nested geometry-like objects
-        if hasattr(valor, 'geom_type'):
-            return None
-    except Exception:
-        return None
     try:
         json.dumps(valor)
         return valor
