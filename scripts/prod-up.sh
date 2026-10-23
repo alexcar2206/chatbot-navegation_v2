@@ -17,7 +17,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-# Refuse to start with empty secrets (the template ships them blank on purpose).
+# Refuse to start with empty secrets (WEBUI_SECRET_KEY ships blank in the template).
 for var in WEBUI_SECRET_KEY WEBUI_ADMIN_PASSWORD; do
   if ! grep -qE "^${var}=.+" "$ENV_FILE"; then
     echo "Error: ${var} is empty in ${ENV_FILE}." >&2
