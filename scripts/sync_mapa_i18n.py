@@ -2,11 +2,12 @@
 """Sync Mapa UI i18n keys into every locale translation.json (idempotent).
 
 Fills missing keys or empty-string values with real translations from
-mapa_i18n_packs.py. Never overwrites non-empty existing values.
+mapa_i18n_packs.py. Non-empty existing values are kept unless --force is given.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -17,18 +18,20 @@ REPO = Path(__file__).resolve().parents[1]
 LOCALES_DIR = REPO / 'src' / 'lib' / 'i18n' / 'locales'
 
 
-def sync_file(path: Path, locale: str) -> int:
+def sync_file(path: Path, locale: str, force: bool = False) -> int:
     raw = path.read_text(encoding='utf-8')
     data = json.loads(raw)
     pack = get_translations(locale)
     updated = 0
     for key in MAPA_KEYS:
         current = data.get(key, None)
-        if current is not None and current != '':
+        if not force and current is not None and current != '':
             continue
         value = pack.get(key) or key
         if not value:
             value = key
+        if current == value:
+            continue
         data[key] = value
         updated += 1
 
@@ -41,6 +44,10 @@ def sync_file(path: Path, locale: str) -> int:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description='Sync Mapa UI i18n keys.')
+    parser.add_argument('--force', action='store_true', help='overwrite existing non-empty values')
+    args = parser.parse_args()
+
     if not LOCALES_DIR.is_dir():
         print(f'Locales dir not found: {LOCALES_DIR}', file=sys.stderr)
         return 1
@@ -50,7 +57,7 @@ def main() -> int:
     empty_remaining = []
     for path in sorted(LOCALES_DIR.glob('*/translation.json')):
         locale = path.parent.name
-        n = sync_file(path, locale)
+        n = sync_file(path, locale, args.force)
         files += 1
         if n:
             print(f'{locale}: updated {n} keys')

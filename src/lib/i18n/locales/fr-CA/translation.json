@@ -3159,5 +3159,7 @@
 	"Selected zones": "Selected zones",
 	"Clear selection": "Clear selection",
 	"Already in the selection": "Already in the selection",
-	"Added to selection": "Added to selection"
+	"Added to selection": "Added to selection",
+	"Save as new draft": "Enregistrer comme nouveau brouillon",
+	"Drafts are stored only in this browser and include personal data.": "Les brouillons sont enregistrés uniquement dans ce navigateur et contiennent des données personnelles."
 }
