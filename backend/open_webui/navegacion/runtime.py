@@ -13,7 +13,7 @@ from typing import Any
 
 import geopandas as gpd
 
-from open_webui.navegacion.geozona import cargar_zonas, geojson_para_mapa, ruta_cache
+from open_webui.navegacion.geozona import cargar_zonas, geojson_para_mapa, preparar_zonas, ruta_cache
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def get_zonas() -> gpd.GeoDataFrame:
         _invalidar_si_cambio()
         if _zonas_gdf is None:
             firma = _firma_cache()
-            _zonas_gdf = cargar_zonas()
+            _zonas_gdf = preparar_zonas(cargar_zonas())
             _firma = firma
             log.info('Loaded navigation zones cache (%s features)', len(_zonas_gdf))
         return _zonas_gdf

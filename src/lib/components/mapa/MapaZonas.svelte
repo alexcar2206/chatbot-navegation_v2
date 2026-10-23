@@ -6,7 +6,6 @@
 		buscarMapaNombre,
 		consultarMapaPunto,
 		getMapaGeojson,
-		getMapaHighlight,
 		getMapaNombres,
 		getMapaStatus,
 		type MapaConsultaResult
@@ -26,6 +25,7 @@
 	let zonesLayer: any = null;
 	let highlightLayer: any = null;
 	let markerLayer: any = null;
+	let zonasGeojson: any = null;
 
 	let loading = true;
 	let errorMsg = '';
@@ -116,6 +116,13 @@
 		}
 	};
 
+	const highlightFor = (nombre: string) => ({
+		type: 'FeatureCollection',
+		features: (zonasGeojson?.features ?? []).filter(
+			(f: any) => f?.properties?._nombre === nombre
+		)
+	});
+
 	const applyResult = async (
 		res: MapaConsultaResult,
 		opts: { queryLat?: number; queryLon?: number; fit?: boolean } = {}
@@ -133,9 +140,9 @@
 			placeMarker(markerLat, markerLon, res.nombre);
 		}
 
-		if (res.encontrado && res.nombre) {
+		const highlight = res.encontrado && res.nombre ? highlightFor(res.nombre) : null;
+		if (highlight?.features.length) {
 			try {
-				const highlight = await getMapaHighlight(token, res.nombre);
 				highlightLayer = L.geoJSON(highlight, {
 					style: {
 						color: '#c2410c',
@@ -230,8 +237,12 @@
 				return;
 			}
 
-			nombres = await getMapaNombres(token);
-			const geojson = await getMapaGeojson(token);
+			const [listaNombres, geojson] = await Promise.all([
+				getMapaNombres(token),
+				getMapaGeojson(token)
+			]);
+			nombres = listaNombres;
+			zonasGeojson = geojson;
 
 			const leafletMod = await import('leaflet');
 			await import('leaflet/dist/leaflet.css');

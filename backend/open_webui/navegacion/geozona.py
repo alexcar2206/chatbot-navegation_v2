@@ -33,8 +33,9 @@ DEFAULT_GDB_RELATIVE = (
 )
 DEFAULT_CACHE_PATH = DATA_DIR / 'geo_cache' / 'zonas_navegacion.geojson'
 
-METADATA_VERSION = 1
+METADATA_VERSION = 2
 SIMPLIFY_TOLERANCE_M = 1.0
+CRS_METRICO = 25829
 
 COLUMNAS_NOMBRE = (
     'NOMBRE',
@@ -133,17 +134,36 @@ def _capa_para_huella(gdb: Path, layer: str | None = None) -> str:
     return ''
 
 
-def huella_gdb(gdb_path: Path | None = None, *, layer: str | None = None) -> dict:
+def huella_gdb(
+    gdb_path: Path | None = None,
+    *,
+    layer: str | None = None,
+    previa: dict | None = None,
+) -> dict:
+    """Huella del .gdb. Si ``previa`` trae el mismo size/mtime de un fichero,
+    se reutiliza su sha256 en vez de volver a leerlo entero."""
     gdb = resolver_ruta_gdb(gdb_path) if gdb_path is not None else ruta_gdb()
     geo_capa_env = os.getenv('GEO_CAPA_ZONAS', '').strip()
     capa = _capa_para_huella(gdb, layer=layer)
+    files_previos = (previa or {}).get('files') or {}
     files: dict[str, dict] = {}
 
     for ruta in iterar_archivos_gdb(gdb):
         rel = ruta.relative_to(gdb).as_posix()
+        st = ruta.stat()
+        anterior = files_previos.get(rel) or {}
+        if (
+            anterior.get('sha256')
+            and anterior.get('size') == st.st_size
+            and anterior.get('mtime_ns') == st.st_mtime_ns
+        ):
+            sha = anterior['sha256']
+        else:
+            sha = _sha256_archivo(ruta)
         files[rel] = {
-            'size': ruta.stat().st_size,
-            'sha256': _sha256_archivo(ruta),
+            'size': st.st_size,
+            'mtime_ns': st.st_mtime_ns,
+            'sha256': sha,
         }
 
     return {
@@ -170,6 +190,15 @@ def guardar_metadata_geo(cache_path: Path, metadata: dict) -> None:
     escribir_json_atomico(ruta_metadata(cache_path), metadata)
 
 
+def _contenido_ficheros(files: dict | None) -> dict:
+    # mtime solo sirve para no recalcular hashes; un touch no debe forzar export.
+    return {
+        rel: (info.get('size'), info.get('sha256'))
+        for rel, info in (files or {}).items()
+        if isinstance(info, dict)
+    }
+
+
 def _huella_coincide(actual: dict, guardada: dict) -> bool:
     for clave in (
         'version',
@@ -177,11 +206,10 @@ def _huella_coincide(actual: dict, guardada: dict) -> bool:
         'layer',
         'geo_capa_zonas_env',
         'simplify_tolerance_m',
-        'files',
     ):
         if actual.get(clave) != guardada.get(clave):
             return False
-    return True
+    return _contenido_ficheros(actual.get('files')) == _contenido_ficheros(guardada.get('files'))
 
 
 def necesita_regenerar_geo(
@@ -200,7 +228,7 @@ def necesita_regenerar_geo(
     if not gdb.exists() or not _parece_file_geodatabase(gdb):
         return False
 
-    actual = huella_gdb(gdb)
+    actual = huella_gdb(gdb, previa=metadata)
     return not _huella_coincide(actual, metadata)
 
 
@@ -370,7 +398,32 @@ def cargar_zonas(cache_path: Path | None = None) -> gpd.GeoDataFrame:
     return gdf
 
 
+def preparar_zonas(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Añade ``_nombre``, ``_area_m2`` e índices de nombres. Idempotente."""
+    if '_nombre' in gdf.columns and 'indice_nombres' in gdf.attrs:
+        return gdf
+
+    zonas = gdf.copy()
+    zonas['_nombre'] = [_nombre_desde_fila(fila) for _, fila in gdf.iterrows()]
+    try:
+        zonas['_area_m2'] = zonas.geometry.to_crs(epsg=CRS_METRICO).area
+    except Exception:
+        zonas['_area_m2'] = zonas.geometry.area
+
+    indice: dict[str, list] = {}
+    for idx, nombre in zonas['_nombre'].items():
+        if nombre:
+            indice.setdefault(normalizar_nombre(nombre), []).append(idx)
+    zonas.attrs['indice_nombres'] = indice
+    zonas.attrs['nombres_ordenados'] = sorted(
+        {n for n in zonas['_nombre'] if n},
+        key=normalizar_nombre,
+    )
+    return zonas
+
+
 def geojson_para_mapa(gdf: gpd.GeoDataFrame, tolerancia_m: float = 25.0) -> dict:
+    gdf = preparar_zonas(gdf).drop(columns=['_area_m2'])
     if gdf.empty:
         return json.loads(gdf.to_json())
 
@@ -383,6 +436,9 @@ def geojson_para_mapa(gdf: gpd.GeoDataFrame, tolerancia_m: float = 25.0) -> dict
 def nombre_feature_geojson(props: dict | None) -> str:
     if not props:
         return ''
+    valor = props.get('_nombre')
+    if valor is not None and str(valor).strip():
+        return str(valor).strip()
     for clave in COLUMNAS_NOMBRE:
         valor = props.get(clave)
         if valor is not None and str(valor).strip():
@@ -478,7 +534,7 @@ def _sanitize_attr_value(valor):
 def _atributos_desde_fila(fila: gpd.GeoSeries) -> dict:
     atributos = {}
     for col in fila.index:
-        if col in ('geometry', '_area') or fila[col] is None:
+        if col in ('geometry', '_area', '_area_m2', '_nombre') or fila[col] is None:
             continue
         sanitized = _sanitize_attr_value(fila[col])
         if sanitized is None and fila[col] is not None:
@@ -502,7 +558,10 @@ def _indice_seguro(indice) -> int | str | None:
 
 
 def _resultado_desde_fila(fila: gpd.GeoSeries, indice) -> dict:
-    nombre = _nombre_desde_fila(fila)
+    if '_nombre' in fila.index:
+        nombre = fila['_nombre'] or None
+    else:
+        nombre = _nombre_desde_fila(fila)
     embalse_mvp = embalse_en_lista_mvp(nombre)
     atributos = _atributos_desde_fila(fila)
 
@@ -552,11 +611,11 @@ def consultar_punto(
     lon: float,
     gdf: gpd.GeoDataFrame | None = None,
 ) -> dict:
-    zonas = gdf if gdf is not None else cargar_zonas()
-    punto = gpd.GeoDataFrame(geometry=[Point(lon, lat)], crs='EPSG:4326')
+    zonas = preparar_zonas(gdf if gdf is not None else cargar_zonas())
 
     try:
-        coincidencias = zonas[zonas.intersects(punto.geometry.iloc[0])].copy()
+        posiciones = zonas.sindex.query(Point(lon, lat), predicate='intersects')
+        coincidencias = zonas.iloc[sorted(posiciones)]
     except Exception:
         return _resultado_vacio(
             'No se pudo consultar el punto (error espacial).',
@@ -571,52 +630,36 @@ def consultar_punto(
             lon=lon,
         )
 
-    try:
-        if len(coincidencias) > 1:
-            coincidencias['_area'] = coincidencias.geometry.area
-            coincidencias = coincidencias.sort_values('_area', ascending=True)
-    except Exception:
-        pass
+    if len(coincidencias) > 1:
+        coincidencias = coincidencias.sort_values('_area_m2', ascending=True, kind='stable')
 
     idx = coincidencias.index[0]
     return _resultado_desde_fila(coincidencias.loc[idx], idx)
 
 
 def listar_nombres_zonas(gdf: gpd.GeoDataFrame) -> list[str]:
-    nombres: set[str] = set()
-    for _, fila in gdf.iterrows():
-        nombre = _nombre_desde_fila(fila)
-        if nombre:
-            nombres.add(nombre)
-    return sorted(nombres, key=lambda n: normalizar_nombre(n))
+    return list(preparar_zonas(gdf).attrs['nombres_ordenados'])
 
 
 def buscar_por_nombre(
     nombre: str,
     gdf: gpd.GeoDataFrame | None = None,
 ) -> dict:
-    zonas = gdf if gdf is not None else cargar_zonas()
+    zonas = preparar_zonas(gdf if gdf is not None else cargar_zonas())
     clave = normalizar_nombre(nombre)
     if not clave:
         return _resultado_vacio('Indica un nombre de embalse o zona para buscar.')
 
-    coincidencias = []
-    for idx, fila in zonas.iterrows():
-        nombre_fila = _nombre_desde_fila(fila)
-        if nombre_fila and normalizar_nombre(nombre_fila) == clave:
-            coincidencias.append((idx, fila))
-
-    if not coincidencias:
+    indices = zonas.attrs['indice_nombres'].get(clave)
+    if not indices:
         return _resultado_vacio(f'No se encontró ninguna zona con el nombre «{nombre}».')
 
+    coincidencias = zonas.loc[indices]
     if len(coincidencias) > 1:
-        try:
-            coincidencias.sort(key=lambda par: float(par[1].geometry.area))
-        except Exception:
-            pass
+        coincidencias = coincidencias.sort_values('_area_m2', ascending=True, kind='stable')
 
-    idx, fila = coincidencias[0]
-    return _resultado_desde_fila(fila, idx)
+    idx = coincidencias.index[0]
+    return _resultado_desde_fila(coincidencias.loc[idx], idx)
 
 
 def bounds_wgs84(gdf: gpd.GeoDataFrame) -> tuple[float, float, float, float]:
