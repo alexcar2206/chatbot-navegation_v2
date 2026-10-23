@@ -123,6 +123,14 @@ export const DEFAULT_CAPABILITIES = {
 
 export const PASTED_TEXT_CHARACTER_LIMIT = 1000;
 
+// Chatbot Navegation / Miño-Sil palette. src/app.html cannot import this module
+// and repeats these values (inline script and --brand-* CSS variables).
+export const BRAND_COLORS = {
+	primary: '#0b4f6c',
+	surfaceLight: '#e8f1f5',
+	surfaceDark: '#042a3a'
+} as const;
+
 // Source: https://kit.svelte.dev/docs/modules#$env-static-public
 // This feature, akin to $env/static/private, exclusively incorporates environment variables
 // that are prefixed with config.kit.env.publicPrefix (usually set to PUBLIC_).

@@ -4,6 +4,7 @@
 	const dispatch = createEventDispatcher();
 
 	import { config, models, settings, theme, user } from '$lib/stores';
+	import { BRAND_COLORS } from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -158,18 +159,21 @@
 					? 'dark'
 					: 'light';
 				console.log('Setting system meta theme color: ' + systemTheme);
-				metaThemeColor.setAttribute('content', systemTheme === 'light' ? '#e8f1f5' : '#0b4f6c');
+				metaThemeColor.setAttribute(
+					'content',
+					systemTheme === 'light' ? BRAND_COLORS.surfaceLight : BRAND_COLORS.primary
+				);
 			} else {
 				console.log('Setting meta theme color: ' + _theme);
 				metaThemeColor.setAttribute(
 					'content',
 					_theme === 'dark'
-						? '#0b4f6c'
+						? BRAND_COLORS.primary
 						: _theme === 'oled-dark'
-							? '#042a3a'
+							? BRAND_COLORS.surfaceDark
 							: _theme === 'her'
 								? '#983724'
-								: '#e8f1f5'
+								: BRAND_COLORS.surfaceLight
 				);
 			}
 		}

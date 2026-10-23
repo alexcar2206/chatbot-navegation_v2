@@ -47,6 +47,12 @@
 		<script>
 			// On page load or when changing themes, best to add inline in `head` to avoid FOUC
 			(() => {
+				// Brand palette: keep in sync with BRAND_COLORS in src/lib/constants.ts
+				// and the --brand-* variables at the end of this file.
+				const BRAND_PRIMARY = '#0b4f6c';
+				const BRAND_SURFACE_LIGHT = '#e8f1f5';
+				const BRAND_SURFACE_DARK = '#042a3a';
+
 				const metaThemeColorTag = document.querySelector('meta[name="theme-color"]');
 				const prefersDarkTheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -56,23 +62,26 @@
 
 				if (localStorage.theme === 'system') {
 					document.documentElement.classList.add(prefersDarkTheme ? 'dark' : 'light');
-					metaThemeColorTag.setAttribute('content', prefersDarkTheme ? '#0b4f6c' : '#e8f1f5');
+					metaThemeColorTag.setAttribute(
+						'content',
+						prefersDarkTheme ? BRAND_PRIMARY : BRAND_SURFACE_LIGHT
+					);
 				} else if (localStorage.theme === 'oled-dark') {
 					document.documentElement.style.setProperty('--color-gray-800', '#101010');
 					document.documentElement.style.setProperty('--color-gray-850', '#050505');
 					document.documentElement.style.setProperty('--color-gray-900', '#000000');
 					document.documentElement.style.setProperty('--color-gray-950', '#000000');
 					document.documentElement.classList.add('dark');
-					metaThemeColorTag.setAttribute('content', '#042a3a');
+					metaThemeColorTag.setAttribute('content', BRAND_SURFACE_DARK);
 				} else if (localStorage.theme === 'light') {
 					document.documentElement.classList.add('light');
-					metaThemeColorTag.setAttribute('content', '#e8f1f5');
+					metaThemeColorTag.setAttribute('content', BRAND_SURFACE_LIGHT);
 				} else if (localStorage.theme === 'her') {
 					document.documentElement.classList.add('her');
 					metaThemeColorTag.setAttribute('content', '#983724');
 				} else {
 					document.documentElement.classList.add('dark');
-					metaThemeColorTag.setAttribute('content', '#0b4f6c');
+					metaThemeColorTag.setAttribute('content', BRAND_PRIMARY);
 				}
 
 				// LICENSE covers these Open WebUI splash logo assets.
@@ -93,11 +102,11 @@
 						if (e.matches) {
 							document.documentElement.classList.add('dark');
 							document.documentElement.classList.remove('light');
-							metaThemeColorTag.setAttribute('content', '#0b4f6c');
+							metaThemeColorTag.setAttribute('content', BRAND_PRIMARY);
 						} else {
 							document.documentElement.classList.add('light');
 							document.documentElement.classList.remove('dark');
-							metaThemeColorTag.setAttribute('content', '#e8f1f5');
+							metaThemeColorTag.setAttribute('content', BRAND_SURFACE_LIGHT);
 						}
 					}
 				});
@@ -208,12 +217,20 @@
 			overscroll-behavior-y: none;
 		}
 
+		/* Brand palette: keep in sync with BRAND_COLORS in src/lib/constants.ts.
+		   Also used by static/custom.css. */
+		:root {
+			--brand-primary: #0b4f6c;
+			--brand-surface-light: #e8f1f5;
+			--brand-surface-dark: #042a3a;
+		}
+
 		#splash-screen {
-			background: #e8f1f5;
+			background: var(--brand-surface-light);
 		}
 
 		html.dark #splash-screen {
-			background: #042a3a;
+			background: var(--brand-surface-dark);
 		}
 
 		html.her #splash-screen {
