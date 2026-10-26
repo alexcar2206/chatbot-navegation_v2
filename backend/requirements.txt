@@ -74,7 +74,7 @@ fpdf2==2.8.7
 pymdown-extensions==10.21.3
 docx2txt==0.9
 python-docx==1.2.0
-docxtpl>=0.19.0
+docxtpl==0.20.2
 python-pptx==1.0.2
 msoffcrypto-tool==6.0.0
 unstructured==0.22.31
@@ -143,8 +143,10 @@ av==14.0.1 # Caution: Set due to FATAL FIPS SELFTEST FAILURE, see discussion htt
 colbert-ai==0.2.22
 
 ## Geo / navigation map (Anexo 3 zones)
-geopandas>=1.0.0
-pyogrio>=0.7.0
+geopandas==1.2.0
+pyogrio==0.13.0
+# Cross-process lock for geo_cache / plantilla regeneration (navegacion/_fs.py)
+filelock==3.32.3
 
 ## LDAP
 ldap3==2.9.1

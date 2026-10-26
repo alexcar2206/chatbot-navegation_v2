@@ -15,10 +15,7 @@
 /* --app-text-scale is updated via the UI Scale slider (Interface.svelte) */
 :root {
 	--app-text-scale: 1;
-	/* Chatbot Navegation / Miño-Sil brand palette */
-	--brand-primary: #0b4f6c;
-	--brand-surface-light: #e8f1f5;
-	--brand-surface-dark: #042a3a;
+	/* Brand palette (--brand-*) is defined in src/app.html so the splash can use it. */
 }
 
 html {

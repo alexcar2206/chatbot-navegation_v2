@@ -29,7 +29,7 @@
 		<div class="space-y-1.5">
 			{#if campo.tipo !== 'checkbox'}
 				<label class="block text-sm font-medium text-gray-800 dark:text-gray-100" for="dr-{campo.clave}">
-					{campo.etiqueta}
+					{$i18n.t(campo.etiqueta)}
 					{#if campo.obligatorio}<span class="text-red-500">*</span>{/if}
 				</label>
 			{/if}
@@ -74,10 +74,10 @@
 					}}
 				>
 					{#if campo.permite_vacio || !campo.obligatorio}
-						<option value={OPCION_VACIA}>{OPCION_VACIA}</option>
+						<option value={OPCION_VACIA}>{$i18n.t(OPCION_VACIA)}</option>
 					{/if}
 					{#each campo.opciones || [] as op}
-						<option value={op}>{op}</option>
+						<option value={op}>{$i18n.t(op)}</option>
 					{/each}
 				</select>
 			{:else if campo.tipo === 'multiselect'}
@@ -94,7 +94,7 @@
 									(datos[campo.clave] as string[]).includes(op)}
 								on:change={(e) => toggleMulti(campo.clave, op, e.currentTarget.checked)}
 							/>
-							<span>{op}</span>
+							<span>{$i18n.t(op)}</span>
 						</label>
 					{/each}
 				</div>
@@ -108,7 +108,7 @@
 						on:change={(e) => setValor(campo.clave, e.currentTarget.checked)}
 					/>
 					<span>
-						{campo.etiqueta}
+						{$i18n.t(campo.etiqueta)}
 						{#if campo.obligatorio}<span class="text-red-500">*</span>{/if}
 					</span>
 				</label>
@@ -123,7 +123,7 @@
 			{/if}
 
 			{#if campo.ayuda}
-				<p class="text-xs text-gray-500 dark:text-gray-400">{campo.ayuda}</p>
+				<p class="text-xs text-gray-500 dark:text-gray-400">{$i18n.t(campo.ayuda)}</p>
 			{/if}
 		</div>
 	{/each}

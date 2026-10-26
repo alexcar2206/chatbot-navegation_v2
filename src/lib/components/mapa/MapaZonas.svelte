@@ -6,12 +6,12 @@
 		buscarMapaNombre,
 		consultarMapaPunto,
 		getMapaGeojson,
-		getMapaHighlight,
 		getMapaNombres,
 		getMapaStatus,
 		type MapaConsultaResult
 	} from '$lib/apis/mapa';
-	import { config } from '$lib/stores';
+	import { config, user } from '$lib/stores';
+	import { featureNavegacionDisponible } from '$lib/utils/navegacion';
 
 	const i18n = getContext('i18n');
 	// Re-evaluate $i18n.t(...) when the user changes language in Settings.
@@ -25,6 +25,8 @@
 	let zonesLayer: any = null;
 	let highlightLayer: any = null;
 	let markerLayer: any = null;
+	let zonasGeojson: any = null;
+	let destroyed = false;
 
 	let loading = true;
 	let errorMsg = '';
@@ -103,9 +105,9 @@
 			map.removeLayer(markerLayer);
 			markerLayer = null;
 		}
-		markerLayer = L.marker([lat, lon])
-			.bindPopup(label || `${lat.toFixed(5)}, ${lon.toFixed(5)}`)
-			.addTo(map);
+		const popup = document.createElement('div');
+		popup.textContent = label || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+		markerLayer = L.marker([lat, lon]).bindPopup(popup).addTo(map);
 	};
 
 	const clearHighlight = () => {
@@ -114,6 +116,13 @@
 			highlightLayer = null;
 		}
 	};
+
+	const highlightFor = (nombre: string) => ({
+		type: 'FeatureCollection',
+		features: (zonasGeojson?.features ?? []).filter(
+			(f: any) => f?.properties?._nombre === nombre
+		)
+	});
 
 	const applyResult = async (
 		res: MapaConsultaResult,
@@ -132,9 +141,9 @@
 			placeMarker(markerLat, markerLon, res.nombre);
 		}
 
-		if (res.encontrado && res.nombre) {
+		const highlight = res.encontrado && res.nombre ? highlightFor(res.nombre) : null;
+		if (highlight?.features.length) {
 			try {
-				const highlight = await getMapaHighlight(token, res.nombre);
 				highlightLayer = L.geoJSON(highlight, {
 					style: {
 						color: '#c2410c',
@@ -195,9 +204,11 @@
 	};
 
 	const onConsultarCoords = async () => {
-		const lat = Number(latInput);
-		const lon = Number(lonInput);
-		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+		const latTxt = String(latInput ?? '').trim();
+		const lonTxt = String(lonInput ?? '').trim();
+		const lat = Number(latTxt);
+		const lon = Number(lonTxt);
+		if (!latTxt || !lonTxt || !Number.isFinite(lat) || !Number.isFinite(lon)) {
 			toast.error($i18n.t('Enter valid latitude and longitude (EPSG:4326)'));
 			return;
 		}
@@ -221,6 +232,7 @@
 	onMount(async () => {
 		try {
 			const status = await getMapaStatus(token);
+			if (destroyed) return;
 			if (!status?.available) {
 				errorMsg = $i18n.t(
 					'The map is not available yet. Wait for the docs pack seed and geo_cache generation.'
@@ -229,11 +241,17 @@
 				return;
 			}
 
-			nombres = await getMapaNombres(token);
-			const geojson = await getMapaGeojson(token);
+			const [listaNombres, geojson] = await Promise.all([
+				getMapaNombres(token),
+				getMapaGeojson(token)
+			]);
+			if (destroyed) return;
+			nombres = listaNombres;
+			zonasGeojson = geojson;
 
 			const leafletMod = await import('leaflet');
 			await import('leaflet/dist/leaflet.css');
+			if (destroyed || !mapElement) return;
 			L = leafletMod.default;
 
 			map = L.map(mapElement).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
@@ -268,6 +286,7 @@
 	});
 
 	onDestroy(() => {
+		destroyed = true;
 		if (map) {
 			map.remove();
 			map = null;
@@ -351,7 +370,7 @@
 	{/if}
 
 	<div class="flex flex-col lg:flex-row gap-3 w-full items-stretch">
-		{#if seleccionadas.length > 0 && ($config?.features?.enable_declaracion ?? false)}
+		{#if seleccionadas.length > 0 && featureNavegacionDisponible($config, $user, 'declaracion')}
 			<div
 				class="order-1 lg:order-2 w-full lg:w-64 shrink-0 rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 text-sm flex flex-col gap-3 lg:h-[min(60vh,560px)]"
 			>
@@ -449,7 +468,7 @@
 						</div>
 					{/if}
 				</dl>
-				{#if $config?.features?.enable_declaracion ?? false}
+				{#if featureNavegacionDisponible($config, $user, 'declaracion')}
 					<div class="pt-2 flex flex-wrap gap-2">
 						{#if resultado.embalse_mvp}
 							<button

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import unicodedata
@@ -17,9 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 from shapely.geometry import Point
 
 from open_webui.env import DATA_DIR
+from open_webui.navegacion._fs import escribir_json_atomico, escritura_atomica, lock_regeneracion
 from open_webui.navegacion.constants import EMBALSES_OPCION_A
 
 log = logging.getLogger(__name__)
@@ -32,8 +35,11 @@ DEFAULT_GDB_RELATIVE = (
 )
 DEFAULT_CACHE_PATH = DATA_DIR / 'geo_cache' / 'zonas_navegacion.geojson'
 
-METADATA_VERSION = 1
+METADATA_VERSION = 3
 SIMPLIFY_TOLERANCE_M = 1.0
+# El Anexo 3 viene en ETRS89 / UTM 29N (Galicia); se usa también para medir y simplificar.
+CRS_ORIGEN_POR_DEFECTO = 'EPSG:25829'
+CRS_METRICO = 25829
 
 COLUMNAS_NOMBRE = (
     'NOMBRE',
@@ -121,28 +127,36 @@ def _sha256_archivo(ruta: Path) -> str:
     return digest.hexdigest()
 
 
-def _capa_para_huella(gdb: Path, layer: str | None = None) -> str:
-    geo_capa_env = os.getenv('GEO_CAPA_ZONAS', '').strip()
-    if layer:
-        return layer
-    if geo_capa_env:
-        return geo_capa_env
-    if _parece_file_geodatabase(gdb):
-        return detectar_capa_zonas(gdb)
-    return ''
-
-
-def huella_gdb(gdb_path: Path | None = None, *, layer: str | None = None) -> dict:
+def huella_gdb(
+    gdb_path: Path | None = None,
+    *,
+    layer: str | None = None,
+    previa: dict | None = None,
+) -> dict:
+    """Huella del .gdb. Si ``previa`` trae el mismo size/mtime de un fichero,
+    se reutiliza su sha256 en vez de volver a leerlo entero."""
     gdb = resolver_ruta_gdb(gdb_path) if gdb_path is not None else ruta_gdb()
     geo_capa_env = os.getenv('GEO_CAPA_ZONAS', '').strip()
-    capa = _capa_para_huella(gdb, layer=layer)
+    capa = detectar_capa_zonas(gdb, capa_forzada=layer)
+    files_previos = (previa or {}).get('files') or {}
     files: dict[str, dict] = {}
 
     for ruta in iterar_archivos_gdb(gdb):
         rel = ruta.relative_to(gdb).as_posix()
+        st = ruta.stat()
+        anterior = files_previos.get(rel) or {}
+        if (
+            anterior.get('sha256')
+            and anterior.get('size') == st.st_size
+            and anterior.get('mtime_ns') == st.st_mtime_ns
+        ):
+            sha = anterior['sha256']
+        else:
+            sha = _sha256_archivo(ruta)
         files[rel] = {
-            'size': ruta.stat().st_size,
-            'sha256': _sha256_archivo(ruta),
+            'size': st.st_size,
+            'mtime_ns': st.st_mtime_ns,
+            'sha256': sha,
         }
 
     return {
@@ -166,12 +180,16 @@ def cargar_metadata_geo(cache_path: Path | None = None) -> dict | None:
 
 
 def guardar_metadata_geo(cache_path: Path, metadata: dict) -> None:
-    meta_path = ruta_metadata(cache_path)
-    meta_path.parent.mkdir(parents=True, exist_ok=True)
-    meta_path.write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False),
-        encoding='utf-8',
-    )
+    escribir_json_atomico(ruta_metadata(cache_path), metadata)
+
+
+def _contenido_ficheros(files: dict | None) -> dict:
+    # mtime solo sirve para no recalcular hashes; un touch no debe forzar export.
+    return {
+        rel: (info.get('size'), info.get('sha256'))
+        for rel, info in (files or {}).items()
+        if isinstance(info, dict)
+    }
 
 
 def _huella_coincide(actual: dict, guardada: dict) -> bool:
@@ -181,11 +199,10 @@ def _huella_coincide(actual: dict, guardada: dict) -> bool:
         'layer',
         'geo_capa_zonas_env',
         'simplify_tolerance_m',
-        'files',
     ):
         if actual.get(clave) != guardada.get(clave):
             return False
-    return True
+    return _contenido_ficheros(actual.get('files')) == _contenido_ficheros(guardada.get('files'))
 
 
 def necesita_regenerar_geo(
@@ -204,7 +221,7 @@ def necesita_regenerar_geo(
     if not gdb.exists() or not _parece_file_geodatabase(gdb):
         return False
 
-    actual = huella_gdb(gdb)
+    actual = huella_gdb(gdb, previa=metadata)
     return not _huella_coincide(actual, metadata)
 
 
@@ -229,11 +246,16 @@ def embalse_en_lista_mvp(nombre: str | None) -> str | None:
     return _indice_embalses_mvp().get(clave)
 
 
+def _es_nulo(valor) -> bool:
+    """None, NaN, NaT o pd.NA (solo escalares; listas/arrays no cuentan como nulos)."""
+    return valor is None or (pd.api.types.is_scalar(valor) and bool(pd.isna(valor)))
+
+
 def _nombre_desde_fila(fila: gpd.GeoSeries) -> str | None:
     for columna in COLUMNAS_NOMBRE:
         if columna in fila.index:
             valor = fila[columna]
-            if valor is not None and str(valor).strip():
+            if not _es_nulo(valor) and str(valor).strip():
                 return str(valor).strip()
     for columna, valor in fila.items():
         if columna == 'geometry':
@@ -269,12 +291,16 @@ def _es_poligono(geom_tipo: str | None) -> bool:
 
 
 def detectar_capa_zonas(gdb_path: Path, capa_forzada: str | None = None) -> str:
+    """Capa forzada > GEO_CAPA_ZONAS > autodetección. '' si la ruta no es un .gdb."""
     if capa_forzada:
         return capa_forzada
 
     capa_env = os.getenv('GEO_CAPA_ZONAS', '').strip()
     if capa_env:
         return capa_env
+
+    if not _parece_file_geodatabase(gdb_path):
+        return ''
 
     capas = _listar_capas(gdb_path)
     if not capas:
@@ -289,9 +315,7 @@ def detectar_capa_zonas(gdb_path: Path, capa_forzada: str | None = None) -> str:
             if 'ZONA' in upper or 'NAVEG' in upper or 'EMBALS' in upper:
                 candidatas.append(nombre)
 
-    if len(candidatas) == 1:
-        return candidatas[0]
-    if len(candidatas) > 1:
+    if candidatas:
         return candidatas[0]
     if len(poligonales) == 1:
         return poligonales[0]
@@ -328,11 +352,11 @@ def exportar_geodata(
         raise RuntimeError(f"La capa '{capa_elegida}' no contiene geometrías.")
 
     if gdf.crs is None:
-        gdf = gdf.set_crs('EPSG:25829')
+        gdf = gdf.set_crs(CRS_ORIGEN_POR_DEFECTO)
     if gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
 
-    gdf_proj = gdf.to_crs(epsg=25830)
+    gdf_proj = gdf.to_crs(epsg=CRS_METRICO)
     gdf_proj = gdf_proj.copy()
     gdf_proj['geometry'] = gdf_proj.geometry.simplify(
         tolerance=SIMPLIFY_TOLERANCE_M,
@@ -340,8 +364,8 @@ def exportar_geodata(
     )
     gdf = gdf_proj.to_crs(epsg=4326)
 
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    gdf.to_file(destino, driver='GeoJSON')
+    with escritura_atomica(destino) as tmp:
+        gdf.to_file(tmp, driver='GeoJSON')
 
     meta = {
         **huella_gdb(gdb, layer=capa_elegida),
@@ -374,11 +398,36 @@ def cargar_zonas(cache_path: Path | None = None) -> gpd.GeoDataFrame:
     return gdf
 
 
+def preparar_zonas(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Añade ``_nombre``, ``_area_m2`` e índices de nombres. Idempotente."""
+    if '_nombre' in gdf.columns and 'indice_nombres' in gdf.attrs:
+        return gdf
+
+    zonas = gdf.copy()
+    zonas['_nombre'] = [_nombre_desde_fila(fila) for _, fila in gdf.iterrows()]
+    try:
+        zonas['_area_m2'] = zonas.geometry.to_crs(epsg=CRS_METRICO).area
+    except Exception:
+        zonas['_area_m2'] = zonas.geometry.area
+
+    indice: dict[str, list] = {}
+    for idx, nombre in zonas['_nombre'].items():
+        if nombre:
+            indice.setdefault(normalizar_nombre(nombre), []).append(idx)
+    zonas.attrs['indice_nombres'] = indice
+    zonas.attrs['nombres_ordenados'] = sorted(
+        {n for n in zonas['_nombre'] if n},
+        key=normalizar_nombre,
+    )
+    return zonas
+
+
 def geojson_para_mapa(gdf: gpd.GeoDataFrame, tolerancia_m: float = 25.0) -> dict:
+    gdf = preparar_zonas(gdf).drop(columns=['_area_m2'])
     if gdf.empty:
         return json.loads(gdf.to_json())
 
-    gdf_proj = gdf.to_crs(epsg=25830).copy()
+    gdf_proj = gdf.to_crs(epsg=CRS_METRICO).copy()
     gdf_proj['geometry'] = gdf_proj.geometry.simplify(tolerance=tolerancia_m, preserve_topology=True)
     gdf_display = gdf_proj.to_crs(epsg=4326)
     return json.loads(gdf_display.to_json())
@@ -387,6 +436,9 @@ def geojson_para_mapa(gdf: gpd.GeoDataFrame, tolerancia_m: float = 25.0) -> dict
 def nombre_feature_geojson(props: dict | None) -> str:
     if not props:
         return ''
+    valor = props.get('_nombre')
+    if valor is not None and str(valor).strip():
+        return str(valor).strip()
     for clave in COLUMNAS_NOMBRE:
         valor = props.get(clave)
         if valor is not None and str(valor).strip():
@@ -435,17 +487,17 @@ def _resultado_vacio(
 
 def _sanitize_attr_value(valor):
     """Convert attribute values to JSON-friendly Python scalars."""
-    if valor is None:
+    if _es_nulo(valor):
         return None
-    if hasattr(valor, 'item'):
+    if hasattr(valor, 'item') and not isinstance(valor, (str, bytes)):
         try:
             valor = valor.item()
         except (ValueError, AttributeError):
             pass
+    if isinstance(valor, (bytes, bytearray)) or hasattr(valor, 'geom_type'):
+        return None
     if isinstance(valor, float):
-        if valor != valor or valor in (float('inf'), float('-inf')):  # NaN / inf
-            return None
-        return float(valor)
+        return valor if math.isfinite(valor) else None
     if isinstance(valor, (bool, int, str)):
         return valor
     if hasattr(valor, 'isoformat'):
@@ -453,25 +505,6 @@ def _sanitize_attr_value(valor):
             return valor.isoformat()
         except Exception:
             return str(valor)
-    try:
-        import math
-
-        if isinstance(valor, (int, float)) or (
-            hasattr(valor, '__float__') and not isinstance(valor, (str, bytes, bool))
-        ):
-            fval = float(valor)
-            if math.isnan(fval) or math.isinf(fval):
-                return None
-    except (TypeError, ValueError):
-        pass
-    if isinstance(valor, (bytes, bytearray)):
-        return None
-    try:
-        # Reject nested geometry-like objects
-        if hasattr(valor, 'geom_type'):
-            return None
-    except Exception:
-        return None
     try:
         json.dumps(valor)
         return valor
@@ -482,7 +515,7 @@ def _sanitize_attr_value(valor):
 def _atributos_desde_fila(fila: gpd.GeoSeries) -> dict:
     atributos = {}
     for col in fila.index:
-        if col in ('geometry', '_area') or fila[col] is None:
+        if col in ('geometry', '_area', '_area_m2', '_nombre') or fila[col] is None:
             continue
         sanitized = _sanitize_attr_value(fila[col])
         if sanitized is None and fila[col] is not None:
@@ -506,7 +539,10 @@ def _indice_seguro(indice) -> int | str | None:
 
 
 def _resultado_desde_fila(fila: gpd.GeoSeries, indice) -> dict:
-    nombre = _nombre_desde_fila(fila)
+    if '_nombre' in fila.index:
+        nombre = fila['_nombre'] or None
+    else:
+        nombre = _nombre_desde_fila(fila)
     embalse_mvp = embalse_en_lista_mvp(nombre)
     atributos = _atributos_desde_fila(fila)
 
@@ -556,11 +592,11 @@ def consultar_punto(
     lon: float,
     gdf: gpd.GeoDataFrame | None = None,
 ) -> dict:
-    zonas = gdf if gdf is not None else cargar_zonas()
-    punto = gpd.GeoDataFrame(geometry=[Point(lon, lat)], crs='EPSG:4326')
+    zonas = preparar_zonas(gdf if gdf is not None else cargar_zonas())
 
     try:
-        coincidencias = zonas[zonas.intersects(punto.geometry.iloc[0])].copy()
+        posiciones = zonas.sindex.query(Point(lon, lat), predicate='intersects')
+        coincidencias = zonas.iloc[sorted(posiciones)]
     except Exception:
         return _resultado_vacio(
             'No se pudo consultar el punto (error espacial).',
@@ -575,52 +611,36 @@ def consultar_punto(
             lon=lon,
         )
 
-    try:
-        if len(coincidencias) > 1:
-            coincidencias['_area'] = coincidencias.geometry.area
-            coincidencias = coincidencias.sort_values('_area', ascending=True)
-    except Exception:
-        pass
+    if len(coincidencias) > 1:
+        coincidencias = coincidencias.sort_values('_area_m2', ascending=True, kind='stable')
 
     idx = coincidencias.index[0]
     return _resultado_desde_fila(coincidencias.loc[idx], idx)
 
 
 def listar_nombres_zonas(gdf: gpd.GeoDataFrame) -> list[str]:
-    nombres: set[str] = set()
-    for _, fila in gdf.iterrows():
-        nombre = _nombre_desde_fila(fila)
-        if nombre:
-            nombres.add(nombre)
-    return sorted(nombres, key=lambda n: normalizar_nombre(n))
+    return list(preparar_zonas(gdf).attrs['nombres_ordenados'])
 
 
 def buscar_por_nombre(
     nombre: str,
     gdf: gpd.GeoDataFrame | None = None,
 ) -> dict:
-    zonas = gdf if gdf is not None else cargar_zonas()
+    zonas = preparar_zonas(gdf if gdf is not None else cargar_zonas())
     clave = normalizar_nombre(nombre)
     if not clave:
         return _resultado_vacio('Indica un nombre de embalse o zona para buscar.')
 
-    coincidencias = []
-    for idx, fila in zonas.iterrows():
-        nombre_fila = _nombre_desde_fila(fila)
-        if nombre_fila and normalizar_nombre(nombre_fila) == clave:
-            coincidencias.append((idx, fila))
-
-    if not coincidencias:
+    indices = zonas.attrs['indice_nombres'].get(clave)
+    if not indices:
         return _resultado_vacio(f'No se encontró ninguna zona con el nombre «{nombre}».')
 
+    coincidencias = zonas.loc[indices]
     if len(coincidencias) > 1:
-        try:
-            coincidencias.sort(key=lambda par: float(par[1].geometry.area))
-        except Exception:
-            pass
+        coincidencias = coincidencias.sort_values('_area_m2', ascending=True, kind='stable')
 
-    idx, fila = coincidencias[0]
-    return _resultado_desde_fila(fila, idx)
+    idx = coincidencias.index[0]
+    return _resultado_desde_fila(coincidencias.loc[idx], idx)
 
 
 def bounds_wgs84(gdf: gpd.GeoDataFrame) -> tuple[float, float, float, float]:
@@ -656,17 +676,20 @@ def regenerar_geo_si_cambio() -> dict:
         log.warning(msg)
         return {'ok': False, 'action': 'missing', 'message': msg, 'cache': str(cache)}
 
-    if modo == 'auto' and not necesita_regenerar_geo(gdb, cache):
-        msg = f'Sin cambios en el .gdb; {cache.parent}/ está actualizado.'
-        log.info(msg)
-        return {'ok': True, 'action': 'up_to_date', 'message': msg, 'cache': str(cache)}
+    # Varios workers pueden arrancar a la vez: solo uno exporta; el resto vuelve
+    # a comprobar la huella tras obtener el lock y encuentra el cache al día.
+    with lock_regeneracion('geo_cache'):
+        if modo == 'auto' and not necesita_regenerar_geo(gdb, cache):
+            msg = f'Sin cambios en el .gdb; {cache.parent}/ está actualizado.'
+            log.info(msg)
+            return {'ok': True, 'action': 'up_to_date', 'message': msg, 'cache': str(cache)}
 
-    try:
-        destino = exportar_geodata(gdb_path=gdb, cache_path=cache)
-    except Exception as exc:
-        msg = f'No se pudo regenerar geo_cache/: {exc}'
-        log.exception(msg)
-        return {'ok': False, 'action': 'error', 'message': msg, 'cache': str(cache)}
+        try:
+            destino = exportar_geodata(gdb_path=gdb, cache_path=cache)
+        except Exception as exc:
+            msg = f'No se pudo regenerar geo_cache/: {exc}'
+            log.exception(msg)
+            return {'ok': False, 'action': 'error', 'message': msg, 'cache': str(cache)}
 
     msg = f'GeoJSON generado en {destino}'
     log.info(msg)

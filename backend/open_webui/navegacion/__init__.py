@@ -9,6 +9,7 @@ from open_webui.navegacion.geozona import (
     geojson_highlight,
     geojson_para_mapa,
     listar_nombres_zonas,
+    preparar_zonas,
     regenerar_geo_si_cambio,
     ruta_cache,
 )
@@ -26,6 +27,7 @@ __all__ = [
     'get_geojson_display',
     'get_zonas',
     'listar_nombres_zonas',
+    'preparar_zonas',
     'regenerar_geo_si_cambio',
     'ruta_cache',
 ]

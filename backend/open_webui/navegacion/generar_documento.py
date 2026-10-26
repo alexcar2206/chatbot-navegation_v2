@@ -23,7 +23,9 @@ def generar_declaracion(datos: dict, plantilla: Path | None = None) -> io.BytesI
 
     contexto = construir_contexto_plantilla(datos)
     documento = DocxTemplate(str(path))
-    documento.render(contexto)
+    # autoescape: los datos del usuario (p.ej. "Pérez & Hijos") se insertan como
+    # texto; sin escapar, '&' o '<' romperían el XML del documento.
+    documento.render(contexto, autoescape=True)
 
     buffer = io.BytesIO()
     documento.save(buffer)
@@ -33,6 +35,7 @@ def generar_declaracion(datos: dict, plantilla: Path | None = None) -> io.BytesI
 
 def nombre_archivo_descarga(datos: dict, extension: str = 'docx') -> str:
     matricula = matricula_efectiva(datos) or 'declaracion'
-    matricula_segura = ''.join(c if c.isalnum() or c in '-_' else '_' for c in matricula)
+    # Solo ASCII: el nombre viaja en una cabecera HTTP (latin-1).
+    matricula_segura = ''.join(c if (c.isascii() and c.isalnum()) or c in '-_' else '_' for c in matricula)
     ext = extension.lstrip('.').lower() or 'docx'
     return f'Declaracion_responsable_{matricula_segura}.{ext}'

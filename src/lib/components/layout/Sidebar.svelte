@@ -27,6 +27,7 @@
 		WEBUI_NAME,
 		sidebarWidth
 	} from '$lib/stores';
+	import { featureNavegacionDisponible } from '$lib/utils/navegacion';
 	import {
 		loadNextChatListPage,
 		refreshChatList,
@@ -154,28 +155,14 @@
 		folderRegistry[folder.id]?.setFolderItems?.();
 	};
 
-	$: pinnedItems = (() => {
-		const items = [...($settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS)];
-		if (($config?.features?.enable_mapa ?? false) && !items.includes('mapa')) {
-			items.unshift('mapa');
-		}
-		if (($config?.features?.enable_declaracion ?? false) && !items.includes('declaracion')) {
-			const mapaIdx = items.indexOf('mapa');
-			if (mapaIdx >= 0) {
-				items.splice(mapaIdx + 1, 0, 'declaracion');
-			} else {
-				items.unshift('declaracion');
-			}
-		}
-		return items;
-	})();
+	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
 			case 'mapa':
-				return $config?.features?.enable_mapa ?? false;
+				return featureNavegacionDisponible($config, $user, 'mapa');
 			case 'declaracion':
-				return $config?.features?.enable_declaracion ?? false;
+				return featureNavegacionDisponible($config, $user, 'declaracion');
 			case 'notes':
 				return (
 					($config?.features?.enable_notes ?? false) &&

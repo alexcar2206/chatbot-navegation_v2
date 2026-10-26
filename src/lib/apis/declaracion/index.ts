@@ -2,8 +2,9 @@ import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 export type DeclaracionStatus = {
 	available: boolean;
-	plantilla_path: string;
-	editable_path: string;
+	/** Only returned to admins. */
+	plantilla_path?: string;
+	editable_path?: string;
 	limitaciones_mvp: string;
 	total_pasos: number;
 	total_pasos_datos: number;
@@ -43,11 +44,33 @@ export type DeclaracionSchema = {
 	total_pasos: number;
 };
 
+/**
+ * Validation error from the backend. `codigo` is the Spanish message template and
+ * also the i18n key; `params` fill its {{placeholders}}; `mensaje` is pre-rendered.
+ */
+export type ErrorValidacion = {
+	codigo: string;
+	params: Record<string, string>;
+	mensaje: string;
+};
+
 export type ValidacionResult = {
 	ok: boolean;
-	errores: string[];
+	errores: ErrorValidacion[];
 	paso?: number;
+	/** Effective registration that will be printed (only from /validar). */
+	matricula?: string;
 };
+
+/** Thrown when the backend rejects the data with structured validation errors (422). */
+export class ErroresValidacion extends Error {
+	errores: ErrorValidacion[];
+
+	constructor(errores: ErrorValidacion[]) {
+		super(errores.map((e) => e.mensaje).join('\n'));
+		this.errores = errores;
+	}
+}
 
 const authHeaders = (token: string) => ({
 	Accept: 'application/json',
@@ -58,7 +81,7 @@ const authHeaders = (token: string) => ({
 const parseError = async (res: Response) => {
 	try {
 		const body = await res.json();
-		if (body?.detail?.errores) return body.detail.errores.join('\n');
+		if (Array.isArray(body?.detail?.errores)) return new ErroresValidacion(body.detail.errores);
 		if (Array.isArray(body?.detail)) {
 			return body.detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join('\n');
 		}

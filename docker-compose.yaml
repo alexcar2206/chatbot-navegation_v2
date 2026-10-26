@@ -49,7 +49,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG-main}
+    # Own image name so `docker compose pull` never replaces this custom build with upstream.
+    image: chatbot-navegation:${WEBUI_DOCKER_TAG:-latest}
     container_name: open-webui
     volumes:
       - open-webui:/app/backend/data
@@ -79,6 +80,7 @@ services:
     environment:
       - WEBUI_URL=http://open-webui:8080
       - SEED_DOCS_ZIP_URL=${SEED_DOCS_ZIP_URL:-}
+      - SEED_DOCS_ZIP_SHA256=${SEED_DOCS_ZIP_SHA256:-}
       - SEED_FORCE=${SEED_FORCE:-false}
       - SEED_MARKER_PATH=/data/.seed_webui_complete
       - SEED_MODEL_ID=${SEED_MODEL_ID:-asistente-navegacion-mino}

@@ -38,7 +38,7 @@ curl -s -H "Authorization: Bearer TOKEN" http://localhost:3000/api/v1/declaracio
 curl -s -H "Authorization: Bearer TOKEN" http://localhost:3000/api/v1/declaracion/schema | head
 # Generar DOCX (body JSON con {"datos": { ... campos MVP ... }})
 curl -s -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
-  -d @payload_dr.json -o Declaracion.docx \
+  -d @backend/open_webui/test/navegacion/fixtures/payload_dr.json -o Declaracion.docx \
   http://localhost:3000/api/v1/declaracion/generar
 ```
 

@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
-import shutil
 import sys
 import tempfile
 import time
@@ -146,26 +146,27 @@ def model_exists(s: requests.Session, base: str, model_id: str) -> bool:
     return get_model(s, base, model_id) is not None
 
 
-def download_zip(url: str, dest: Path) -> None:
+def download_zip(url: str, dest: Path, expected_sha256: str = '') -> None:
+    """Download the ZIP; if ``expected_sha256`` is set, abort on mismatch."""
     log.info('Downloading docs ZIP: %s', url)
+    digest = hashlib.sha256()
     with requests.get(url, stream=True, timeout=600) as r:
         r.raise_for_status()
         with dest.open('wb') as f:
             for chunk in r.iter_content(chunk_size=1024 * 256):
                 if chunk:
                     f.write(chunk)
-    log.info('Downloaded %s (%s bytes)', dest, dest.stat().st_size)
+                    digest.update(chunk)
+    log.info('Downloaded %s (%s bytes, sha256=%s)', dest, dest.stat().st_size, digest.hexdigest())
+    if expected_sha256 and digest.hexdigest().lower() != expected_sha256.lower():
+        raise RuntimeError(
+            f'docs ZIP checksum mismatch: expected {expected_sha256}, got {digest.hexdigest()}'
+        )
 
 
 def extract_zip(zip_path: Path, out_dir: Path) -> Path:
     with zipfile.ZipFile(zip_path, 'r') as zf:
         zf.extractall(out_dir)
-    # If ZIP has a single top-level dir wrapping everything, peel one layer for convenience
-    children = [p for p in out_dir.iterdir() if p.name not in {'.', '..'}]
-    if len(children) == 1 and children[0].is_dir():
-        # Keep as-is: that single dir may be the only KB folder OR a wrapper.
-        # Prefer treating immediate children of out_dir as groups when multiple dirs exist.
-        pass
     return out_dir
 
 
@@ -178,33 +179,31 @@ def docs_pack_ready(path: Path) -> bool:
         return False
 
 
-def ensure_docs_pack(zip_url: str, dest: Path, force: bool = False) -> Path:
-    """Download/extract the docs ZIP into dest (shared volume) for RAG + geo GDB."""
+def ensure_docs_pack(zip_url: str, dest: Path, force: bool = False, expected_sha256: str = '') -> Path:
+    """Download/extract the docs ZIP into dest (shared volume) for RAG + geo GDB.
+
+    The new pack is fully downloaded and extracted next to ``dest`` before the
+    old one is touched, so a failed download never leaves the volume without docs.
+    """
     if docs_pack_ready(dest) and not force:
         log.info('docs_pack already present at %s', dest)
         return dest
 
-    if dest.exists() and force:
-        log.info('SEED_FORCE: refreshing docs_pack at %s', dest)
-        shutil.rmtree(dest)
-
-    dest.mkdir(parents=True, exist_ok=True)
-
-    with tempfile.TemporaryDirectory(prefix='webui-docs-pack-') as tmp:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    # Same filesystem as dest so the final swap is a cheap rename.
+    with tempfile.TemporaryDirectory(prefix='.docs-pack-', dir=dest.parent) as tmp:
         tmp_path = Path(tmp)
         zip_path = tmp_path / 'docs.zip'
         extract_dir = tmp_path / 'docs'
         extract_dir.mkdir()
-        download_zip(zip_url, zip_path)
+        download_zip(zip_url, zip_path, expected_sha256=expected_sha256)
         extract_zip(zip_path, extract_dir)
-        for child in extract_dir.iterdir():
-            target = dest / child.name
-            if target.exists():
-                if target.is_dir():
-                    shutil.rmtree(target)
-                else:
-                    target.unlink()
-            shutil.move(str(child), str(target))
+
+        if dest.exists():
+            log.info('Replacing docs_pack at %s', dest)
+            old = tmp_path / 'previous'
+            dest.rename(old)
+        extract_dir.rename(dest)
 
     log.info('Persisted docs_pack at %s', dest)
     return dest
@@ -254,7 +253,31 @@ def knowledge_groups(root: Path) -> list[tuple[str, list[Path]]]:
     return groups
 
 
+def find_knowledge_by_name(s: requests.Session, base: str, name: str) -> dict | None:
+    """Return an existing knowledge base with this exact name (paginated listing)."""
+    page = 1
+    seen = 0
+    while True:
+        r = s.get(f'{base}/api/v1/knowledge/', params={'page': page}, timeout=60)
+        if r.status_code != 200:
+            raise RuntimeError(f'knowledge list failed ({r.status_code}): {r.text[:500]}')
+        data = r.json() or {}
+        items = data.get('items') or []
+        for item in items:
+            if item.get('name') == name[:200]:
+                return item
+        seen += len(items)
+        if not items or seen >= int(data.get('total') or 0):
+            return None
+        page += 1
+
+
 def create_knowledge(s: requests.Session, base: str, name: str, description: str) -> dict:
+    # Idempotent: a previous seed that failed half-way must not duplicate KBs.
+    existing = find_knowledge_by_name(s, base, name)
+    if existing and existing.get('id'):
+        log.info('Reusing existing knowledge base: %s (%s)', name, existing['id'])
+        return existing
     log.info('Creating knowledge base: %s', name)
     r = s.post(
         f'{base}/api/v1/knowledge/create',
@@ -271,6 +294,26 @@ def create_knowledge(s: requests.Session, base: str, name: str, description: str
     if not data or not data.get('id'):
         raise RuntimeError(f'knowledge/create returned unexpected body: {data!r}')
     return data
+
+
+def knowledge_filenames(s: requests.Session, base: str, knowledge_id: str) -> set[str]:
+    """Filenames already attached to a knowledge base (to resume a partial seed)."""
+    names: set[str] = set()
+    page = 1
+    while True:
+        r = s.get(
+            f'{base}/api/v1/knowledge/{knowledge_id}/files',
+            params={'page': page, 'limit': 200},
+            timeout=60,
+        )
+        if r.status_code != 200:
+            raise RuntimeError(f'knowledge files list failed ({r.status_code}): {r.text[:500]}')
+        data = r.json() or {}
+        items = data.get('items') or []
+        names.update(item.get('filename') or (item.get('meta') or {}).get('name') or '' for item in items)
+        if not items or len(names) >= int(data.get('total') or 0):
+            return {n for n in names if n}
+        page += 1
 
 
 def upload_file_to_knowledge(
@@ -499,16 +542,6 @@ def write_marker(path: Path) -> None:
     log.info('Wrote seed marker %s', path)
 
 
-def upsert_prompt_suggestions(s: requests.Session, base: str) -> None:
-    """Persist navigation prompt chips in config (safe to run on every seed)."""
-    r = s.post(
-        f'{base}/api/v1/configs/suggestions',
-        json={'suggestions': SUGGESTION_PROMPTS},
-        timeout=60,
-    )
-    if r.status_code != 200:
-        raise RuntimeError(f'configs/suggestions failed ({r.status_code}): {r.text[:500]}')
-    log.info('Updated ui.prompt_suggestions (%s items)', len(SUGGESTION_PROMPTS))
 
 
 def regenerar_navegacion(s: requests.Session, base: str) -> None:
@@ -558,7 +591,9 @@ def main() -> int:
 
     # Persist pack for map geo even when RAG seed was already completed.
     try:
-        ensure_docs_pack(zip_url, docs_pack, force=force)
+        ensure_docs_pack(
+            zip_url, docs_pack, force=force, expected_sha256=os.getenv('SEED_DOCS_ZIP_SHA256', '').strip()
+        )
     except Exception as e:
         log.error('docs_pack persist failed: %s', e)
         return 1
@@ -584,11 +619,8 @@ def main() -> int:
 
     s = session_with_token(token)
 
-    try:
-        upsert_prompt_suggestions(s, base)
-    except Exception as e:
-        log.error('Prompt suggestions update failed: %s', e)
-        return 1
+    # New-chat prompt chips come from config.py defaults; the seed no longer
+    # overwrites ui.prompt_suggestions, so admin customizations survive restarts.
 
     # Always regen after pack is ready (open-webui lifespan often ran before the ZIP extract).
     regenerar_navegacion(s, base)
@@ -640,7 +672,15 @@ def main() -> int:
             log.error('Failed creating knowledge %s: %s', name, e)
             return 1
         kid = kb['id']
+        try:
+            already = knowledge_filenames(s, base, kid)
+        except Exception as e:
+            log.error('Could not list files of knowledge %s: %s', name, e)
+            return 1
         for fp in files:
+            if fp.name in already:
+                log.info('  Skipping %s (already in knowledge base)', fp.name)
+                continue
             try:
                 upload_file_to_knowledge(s, base, kid, fp)
             except Exception as e:

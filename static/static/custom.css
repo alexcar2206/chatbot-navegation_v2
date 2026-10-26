@@ -1,7 +1,7 @@
-/* Brand splash overrides (Chatbot Navegation / Miño-Sil) — source of truth with src/app.html */
+/* Brand splash overrides (Chatbot Navegation / Miño-Sil). --brand-* are defined in src/app.html. */
 #splash-screen {
-	background: #e8f1f5 !important;
+	background: var(--brand-surface-light) !important;
 }
 html.dark #splash-screen {
-	background: #042a3a !important;
+	background: var(--brand-surface-dark) !important;
 }

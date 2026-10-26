@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import logging
 import os
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 from open_webui.env import DATA_DIR
+from open_webui.navegacion._fs import escribir_json_atomico, escritura_atomica, lock_regeneracion
 from open_webui.navegacion.geozona import ruta_docs_pack
 
 log = logging.getLogger(__name__)
@@ -79,19 +80,13 @@ def _cargar_metadata(plantilla: Path | None = None) -> dict | None:
     if not meta_path.is_file():
         return None
     try:
-        import json
-
         return json.loads(meta_path.read_text(encoding='utf-8'))
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return None
 
 
 def _guardar_metadata(huella: dict, plantilla: Path | None = None) -> None:
-    import json
-
-    meta_path = ruta_metadata_plantilla(plantilla)
-    meta_path.parent.mkdir(parents=True, exist_ok=True)
-    meta_path.write_text(json.dumps(huella, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    escribir_json_atomico(ruta_metadata_plantilla(plantilla), huella)
 
 
 def necesita_regenerar_plantilla(
@@ -119,36 +114,29 @@ def expr_casilla(condicion: str) -> str:
     return f"{{{{ '{MARCA_SI}' if {condicion} else '{MARCA_NO}' }}}}"
 
 
-def append_text(paragraph, text):
+def _nuevo_run_con_formato(paragraph, text, *, vaciar: bool = False):
+    """Añade un run con la fuente del primer run existente; opcionalmente vacía antes el párrafo."""
     ref_run = paragraph.runs[0] if paragraph.runs else None
+    if vaciar:
+        for run in list(paragraph.runs):
+            run._element.getparent().remove(run._element)
     run = paragraph.add_run(text)
     if ref_run is not None:
         run.font.name = ref_run.font.name
         run.font.size = ref_run.font.size
     return run
+
+
+def append_text(paragraph, text):
+    return _nuevo_run_con_formato(paragraph, text)
 
 
 def set_cell_text(cell, text):
-    paragraph = cell.paragraphs[0]
-    ref_run = paragraph.runs[0] if paragraph.runs else None
-    for run in list(paragraph.runs):
-        run._element.getparent().remove(run._element)
-    run = paragraph.add_run(text)
-    if ref_run is not None:
-        run.font.name = ref_run.font.name
-        run.font.size = ref_run.font.size
-    return run
+    return _nuevo_run_con_formato(cell.paragraphs[0], text, vaciar=True)
 
 
 def replace_paragraph_text(paragraph, text):
-    ref_run = paragraph.runs[0] if paragraph.runs else None
-    for run in list(paragraph.runs):
-        run._element.getparent().remove(run._element)
-    run = paragraph.add_run(text)
-    if ref_run is not None:
-        run.font.name = ref_run.font.name
-        run.font.size = ref_run.font.size
-    return run
+    return _nuevo_run_con_formato(paragraph, text, vaciar=True)
 
 
 def forzar_fuente(run_element, nombre):
@@ -270,10 +258,10 @@ def build_plantilla(
             'Espera al seed de docs_pack o configura DR_EDITABLE_DOCX_PATH.'
         )
 
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(src, dst)
-
-    doc = Document(str(dst))
+    # Se carga el original en memoria (no se modifica) y solo se escribe `dst`
+    # al final, de forma atómica: si algún paso falla, no queda una plantilla
+    # sin tags que `plantilla_disponible()` daría por buena.
+    doc = Document(str(src))
     tables = doc.tables
     embalses_taggeados: list[str] = []
 
@@ -451,6 +439,11 @@ def build_plantilla(
 
     dias_runs = list(dias_especificos_p.runs)
     start_idx = 6
+    if len(dias_runs) <= start_idx:
+        raise RuntimeError(
+            f"Se esperaban al menos {start_idx + 1} runs en 'DÍAS ESPECÍFICOS', "
+            f'se encontraron {len(dias_runs)}: {dias_especificos_p.text!r}'
+        )
     dias_runs[start_idx].text = (
         "{% if plazo_modalidad == 'Fechas concretas' %}"
         '{{ plazo_fecha_desde }} al {{ plazo_fecha_hasta }}'
@@ -489,7 +482,8 @@ def build_plantilla(
     append_text(firma_table.rows[2].cells[0].paragraphs[1], ' {{ firma_nombre }}')
     append_text(firma_table.rows[2].cells[5].paragraphs[1], ' {{ firma_dni }}')
 
-    doc.save(str(dst))
+    with escritura_atomica(dst) as tmp:
+        doc.save(str(tmp))
     _guardar_metadata(_huella_archivo(src), dst)
 
     return {
@@ -531,17 +525,18 @@ def regenerar_plantilla_si_cambio() -> dict:
         log.warning(msg)
         return {'ok': False, 'action': 'missing', 'message': msg, 'plantilla': str(dst)}
 
-    if modo == 'auto' and not necesita_regenerar_plantilla(src, dst):
-        msg = f'Sin cambios en el formulario editable; {dst} está actualizada.'
-        log.info(msg)
-        return {'ok': True, 'action': 'up_to_date', 'message': msg, 'plantilla': str(dst)}
+    with lock_regeneracion('plantilla_dr'):
+        if modo == 'auto' and not necesita_regenerar_plantilla(src, dst):
+            msg = f'Sin cambios en el formulario editable; {dst} está actualizada.'
+            log.info(msg)
+            return {'ok': True, 'action': 'up_to_date', 'message': msg, 'plantilla': str(dst)}
 
-    try:
-        resultado = build_plantilla(editable=src, plantilla=dst)
-    except Exception as exc:
-        msg = f'No se pudo regenerar la plantilla DR: {exc}'
-        log.exception(msg)
-        return {'ok': False, 'action': 'error', 'message': msg, 'plantilla': str(dst)}
+        try:
+            resultado = build_plantilla(editable=src, plantilla=dst)
+        except Exception as exc:
+            msg = f'No se pudo regenerar la plantilla DR: {exc}'
+            log.exception(msg)
+            return {'ok': False, 'action': 'error', 'message': msg, 'plantilla': str(dst)}
 
     msg = f'Plantilla regenerada en {resultado["plantilla"]}.'
     log.info(msg)

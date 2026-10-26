@@ -1,4 +1,8 @@
-"""API de consulta de zonas de navegación (Anexo 3 / mapa Miño-Sil)."""
+"""API de consulta de zonas de navegación (Anexo 3 / mapa Miño-Sil).
+
+Los handlers son ``def`` (no ``async``): geopandas es síncrono y FastAPI los
+ejecuta en el threadpool para no bloquear el event loop.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,8 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from open_webui.models.config import Config
+
+from open_webui.navegacion.deps import require_feature
 from open_webui.navegacion.geozona import (
     buscar_por_nombre,
     cache_disponible,
@@ -18,68 +23,43 @@ from open_webui.navegacion.geozona import (
     ruta_cache,
 )
 from open_webui.navegacion.runtime import clear_zonas_cache, get_geojson_display, get_zonas
-from open_webui.utils.auth import get_admin_user, get_verified_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+MENSAJE_NO_DISPONIBLE = 'El mapa aún no está disponible. Espera a que termine el seed de docs_pack.'
 
-async def _require_mapa_feature(user=Depends(get_verified_user)):
-    enabled = await Config.get('mapa.enable')
-    if enabled is False:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Mapa deshabilitado')
-    return user
-
-
-async def _require_mapa_admin(user=Depends(get_admin_user)):
-    enabled = await Config.get('mapa.enable')
-    if enabled is False:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Mapa deshabilitado')
-    return user
+require_mapa = require_feature('mapa.enable', 'features.mapa', disabled_detail='Mapa deshabilitado')
+require_mapa_admin = require_feature('mapa.enable', 'features.mapa', admin=True, disabled_detail='Mapa deshabilitado')
 
 
 def _ensure_geo_ready() -> None:
-    """If seed finished after startup, generate cache on first map request."""
-    if cache_disponible():
-        return
-    result = regenerar_geo_si_cambio()
-    clear_zonas_cache()
-    if not result.get('ok') or not cache_disponible():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=result.get('message')
-            or 'Cache geográfico no disponible. Espera al seed de docs_pack o regenera geo_cache/.',
-        )
+    """Solo comprueba: la regeneración ocurre en el lifespan o en ``POST /regenerar``."""
+    if not cache_disponible():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=MENSAJE_NO_DISPONIBLE)
 
 
 def _http_from_geo_error(exc: Exception) -> HTTPException:
     if isinstance(exc, FileNotFoundError):
-        return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+        return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=MENSAJE_NO_DISPONIBLE)
     log.exception('Mapa query failed: %s', exc)
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail=f'No se pudo completar la consulta del mapa: {exc}',
+        detail='No se pudo completar la consulta del mapa.',
     )
 
 
 @router.get('/status')
-async def mapa_status(user=Depends(_require_mapa_feature)):
-    available = cache_disponible()
-    if not available:
-        try:
-            _ensure_geo_ready()
-            available = cache_disponible()
-        except HTTPException:
-            available = False
-    return {
-        'available': available,
-        'cache_path': str(ruta_cache()),
-    }
+def mapa_status(user=Depends(require_mapa)):
+    respuesta = {'available': cache_disponible()}
+    if user.role == 'admin':
+        respuesta['cache_path'] = str(ruta_cache())
+    return respuesta
 
 
 @router.get('/nombres')
-async def mapa_nombres(user=Depends(_require_mapa_feature)):
+def mapa_nombres(user=Depends(require_mapa)):
     _ensure_geo_ready()
     try:
         nombres = listar_nombres_zonas(get_zonas())
@@ -89,7 +69,7 @@ async def mapa_nombres(user=Depends(_require_mapa_feature)):
 
 
 @router.get('/geojson')
-async def mapa_geojson(user=Depends(_require_mapa_feature)):
+def mapa_geojson(user=Depends(require_mapa)):
     _ensure_geo_ready()
     try:
         return get_geojson_display()
@@ -98,10 +78,10 @@ async def mapa_geojson(user=Depends(_require_mapa_feature)):
 
 
 @router.get('/consulta')
-async def mapa_consulta(
-    lat: float = Query(..., description='Latitud WGS84'),
-    lon: float = Query(..., description='Longitud WGS84'),
-    user=Depends(_require_mapa_feature),
+def mapa_consulta(
+    lat: float = Query(..., ge=-90, le=90, description='Latitud WGS84'),
+    lon: float = Query(..., ge=-180, le=180, description='Longitud WGS84'),
+    user=Depends(require_mapa),
 ):
     _ensure_geo_ready()
     try:
@@ -111,9 +91,9 @@ async def mapa_consulta(
 
 
 @router.get('/buscar')
-async def mapa_buscar(
-    q: str = Query(..., min_length=1, description='Nombre de embalse o zona'),
-    user=Depends(_require_mapa_feature),
+def mapa_buscar(
+    q: str = Query(..., min_length=1, max_length=200, description='Nombre de embalse o zona'),
+    user=Depends(require_mapa),
 ):
     _ensure_geo_ready()
     try:
@@ -123,9 +103,9 @@ async def mapa_buscar(
 
 
 @router.get('/highlight')
-async def mapa_highlight(
-    nombre: Optional[str] = Query(None, description='Nombre de zona a resaltar'),
-    user=Depends(_require_mapa_feature),
+def mapa_highlight(
+    nombre: Optional[str] = Query(None, max_length=200, description='Nombre de zona a resaltar'),
+    user=Depends(require_mapa),
 ):
     _ensure_geo_ready()
     try:
@@ -137,7 +117,7 @@ async def mapa_highlight(
 
 
 @router.post('/regenerar')
-async def mapa_regenerar(user=Depends(_require_mapa_admin)):
+def mapa_regenerar(user=Depends(require_mapa_admin)):
     """Force geo_cache regen from docs_pack GDB (used by webui-seed after pack persist)."""
     result = regenerar_geo_si_cambio()
     clear_zonas_cache()

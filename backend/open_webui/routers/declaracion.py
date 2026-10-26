@@ -1,20 +1,26 @@
-"""API de Declaración Responsable de navegación (Miño-Sil MVP)."""
+"""API de Declaración Responsable de navegación (Miño-Sil MVP).
+
+Los handlers son ``def`` (no ``async``): docxtpl/python-docx son síncronos y
+FastAPI los ejecuta en el threadpool para no bloquear el event loop.
+"""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from open_webui.models.config import Config
+from open_webui.navegacion.deps import require_feature
 from open_webui.navegacion.formulario_dr import (
     LIMITACIONES_MVP,
     NUM_PASO_REVISION,
     TOTAL_PASOS,
     TOTAL_PASOS_DATOS,
+    matricula_efectiva,
     schema_pasos,
     titulo_paso,
     validar_global,
@@ -27,13 +33,22 @@ from open_webui.navegacion.plantilla import (
     ruta_editable,
     ruta_plantilla,
 )
-from open_webui.utils.auth import get_admin_user, get_verified_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
 DOCX_MEDIA = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+MENSAJE_NO_DISPONIBLE = (
+    'La plantilla de declaración aún no está disponible. Espera a que termine el seed de docs_pack.'
+)
+
+require_declaracion = require_feature(
+    'declaracion.enable', 'features.declaracion', disabled_detail='Declaración deshabilitada'
+)
+require_declaracion_admin = require_feature(
+    'declaracion.enable', 'features.declaracion', admin=True, disabled_detail='Declaración deshabilitada'
+)
 
 
 class DatosBody(BaseModel):
@@ -45,61 +60,29 @@ class ValidarPasoBody(BaseModel):
     datos: dict[str, Any] = Field(default_factory=dict)
 
 
-async def _require_declaracion_feature(user=Depends(get_verified_user)):
-    enabled = await Config.get('declaracion.enable')
-    if enabled is False:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail='Declaración deshabilitada'
-        )
-    return user
-
-
-async def _require_declaracion_admin(user=Depends(get_admin_user)):
-    enabled = await Config.get('declaracion.enable')
-    if enabled is False:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail='Declaración deshabilitada'
-        )
-    return user
-
-
 def _ensure_plantilla_ready() -> None:
-    if plantilla_disponible():
-        return
-    result = regenerar_plantilla_si_cambio()
-    if not result.get('ok') or not plantilla_disponible():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=result.get('message')
-            or (
-                'Plantilla de declaración no disponible. Espera al seed de docs_pack '
-                'o regenera la plantilla.'
-            ),
-        )
+    """Solo comprueba: la regeneración ocurre en el lifespan o en ``POST /regenerar``."""
+    if not plantilla_disponible():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=MENSAJE_NO_DISPONIBLE)
 
 
 @router.get('/status')
-async def declaracion_status(user=Depends(_require_declaracion_feature)):
-    available = plantilla_disponible()
-    if not available:
-        try:
-            _ensure_plantilla_ready()
-            available = plantilla_disponible()
-        except HTTPException:
-            available = False
-    return {
-        'available': available,
-        'plantilla_path': str(ruta_plantilla()),
-        'editable_path': str(ruta_editable()),
+def declaracion_status(user=Depends(require_declaracion)):
+    respuesta = {
+        'available': plantilla_disponible(),
         'limitaciones_mvp': LIMITACIONES_MVP,
         'total_pasos': TOTAL_PASOS,
         'total_pasos_datos': TOTAL_PASOS_DATOS,
         'paso_revision': NUM_PASO_REVISION,
     }
+    if user.role == 'admin':
+        respuesta['plantilla_path'] = str(ruta_plantilla())
+        respuesta['editable_path'] = str(ruta_editable())
+    return respuesta
 
 
 @router.get('/schema')
-async def declaracion_schema(user=Depends(_require_declaracion_feature)):
+def declaracion_schema(user=Depends(require_declaracion)):
     pasos = schema_pasos()
     return {
         'pasos': [
@@ -120,9 +103,9 @@ async def declaracion_schema(user=Depends(_require_declaracion_feature)):
 
 
 @router.post('/validar-paso')
-async def declaracion_validar_paso(
+def declaracion_validar_paso(
     body: ValidarPasoBody,
-    user=Depends(_require_declaracion_feature),
+    user=Depends(require_declaracion),
 ):
     if body.paso == NUM_PASO_REVISION:
         errores = validar_global(body.datos)
@@ -137,18 +120,19 @@ async def declaracion_validar_paso(
 
 
 @router.post('/validar')
-async def declaracion_validar(
+def declaracion_validar(
     body: DatosBody,
-    user=Depends(_require_declaracion_feature),
+    user=Depends(require_declaracion),
 ):
     errores = validar_global(body.datos)
-    return {'ok': not errores, 'errores': errores}
+    # La matrícula que se imprimirá: el frontend la muestra en la revisión como valor autoritativo.
+    return {'ok': not errores, 'errores': errores, 'matricula': matricula_efectiva(body.datos)}
 
 
 @router.post('/generar')
-async def declaracion_generar(
+def declaracion_generar(
     body: DatosBody,
-    user=Depends(_require_declaracion_feature),
+    user=Depends(require_declaracion),
 ):
     errores = validar_global(body.datos)
     if errores:
@@ -173,12 +157,12 @@ async def declaracion_generar(
         ) from exc
 
     filename = nombre_archivo_descarga(body.datos)
-    headers = {'Content-Disposition': f'attachment; filename="{filename}"'}
+    headers = {'Content-Disposition': f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"}
     return StreamingResponse(buffer, media_type=DOCX_MEDIA, headers=headers)
 
 
 @router.post('/regenerar')
-async def declaracion_regenerar(user=Depends(_require_declaracion_admin)):
+def declaracion_regenerar(user=Depends(require_declaracion_admin)):
     """Force plantilla regen from docs_pack EDITABLE DOCX (used by webui-seed)."""
     result = regenerar_plantilla_si_cambio()
     available = plantilla_disponible()

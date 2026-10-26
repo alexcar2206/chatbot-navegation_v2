@@ -28,8 +28,6 @@ RUN apt-get update && \
       ca-certificates \
       git \
       python3-dev \
-      libgdal-dev \
-      gdal-bin \
       libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 

@@ -62,6 +62,8 @@ export const DEFAULT_PERMISSIONS = {
 	features: {
 		api_keys: false,
 		notes: true,
+		mapa: true,
+		declaracion: true,
 		channels: true,
 		folders: true,
 		direct_tool_servers: false,

@@ -2098,5 +2098,39 @@ PACKS = {
 }
 
 
+# Keys added after the packs above. Locales without an entry get the English key.
+EXTRA_TRANSLATIONS: dict[str, dict[str, str]] = {
+	'Save as new draft': {
+		'ca-ES': 'Desa com a esborrany nou',
+		'de-DE': 'Als neuen Entwurf speichern',
+		'es-ES': 'Guardar como borrador nuevo',
+		'eu-ES': 'Gorde zirriborro berri gisa',
+		'fr-CA': 'Enregistrer comme nouveau brouillon',
+		'fr-FR': 'Enregistrer comme nouveau brouillon',
+		'gl-ES': 'Gardar como borrador novo',
+		'it-IT': 'Salva come nuova bozza',
+		'pt-BR': 'Salvar como novo rascunho',
+		'pt-PT': 'Guardar como novo rascunho',
+	},
+	'Drafts are stored only in this browser and include personal data.': {
+		'ca-ES': 'Els esborranys només es desen en aquest navegador i inclouen dades personals.',
+		'de-DE': 'Entwürfe werden nur in diesem Browser gespeichert und enthalten personenbezogene Daten.',
+		'es-ES': 'Los borradores se guardan solo en este navegador e incluyen datos personales.',
+		'eu-ES': 'Zirriborroak arakatzaile honetan bakarrik gordetzen dira eta datu pertsonalak dituzte.',
+		'fr-CA': 'Les brouillons sont enregistrés uniquement dans ce navigateur et contiennent des données personnelles.',
+		'fr-FR': 'Les brouillons sont enregistrés uniquement dans ce navigateur et contiennent des données personnelles.',
+		'gl-ES': 'Os borradores gárdanse só neste navegador e inclúen datos persoais.',
+		'it-IT': 'Le bozze sono salvate solo in questo browser e includono dati personali.',
+		'pt-BR': 'Os rascunhos são salvos apenas neste navegador e incluem dados pessoais.',
+		'pt-PT': 'Os rascunhos são guardados apenas neste browser e incluem dados pessoais.',
+	},
+}
+
+ALL_KEYS = DECLARACION_KEYS + tuple(EXTRA_TRANSLATIONS)
+
+
 def get_translations(locale: str) -> dict[str, str]:
-	return PACKS.get(locale) or EN_VALUES
+	pack = dict(PACKS.get(locale) or EN_VALUES)
+	for key, values in EXTRA_TRANSLATIONS.items():
+		pack[key] = values.get(locale, key)
+	return pack

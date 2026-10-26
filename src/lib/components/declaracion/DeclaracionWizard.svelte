@@ -4,26 +4,26 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import {
+		ErroresValidacion,
 		generarDeclaracion,
 		getDeclaracionSchema,
 		getDeclaracionStatus,
 		validarDeclaracion,
 		validarPasoDeclaracion,
 		type DeclaracionSchema,
+		type ErrorValidacion,
 		type PasoSchema
 	} from '$lib/apis/declaracion';
 	import PasoForm from './PasoForm.svelte';
 	import RevisionPanel from './RevisionPanel.svelte';
 	import BorradoresPanel from './BorradoresPanel.svelte';
 	import type { BorradorEntrada } from './borradores';
+	import { traducirError } from './i18n';
 
 	const i18n = getContext('i18n');
 	$: _lang = $i18n.language;
 
 	export let token = '';
-
-	const EMBARCACION_NUEVA = 'Embarcación no declarada anteriormente';
-	const PASO_LUGAR = 5;
 
 	let loading = true;
 	let errorMsg = '';
@@ -31,7 +31,8 @@
 	let schema: DeclaracionSchema | null = null;
 	let paso = 1;
 	let datos: Record<string, unknown> = {};
-	let errores: string[] = [];
+	let errores: ErrorValidacion[] = [];
+	let matriculaFinal = '';
 	let busy = false;
 	let generating = false;
 
@@ -40,11 +41,27 @@
 	$: pasosDatos = schema?.pasos ?? [];
 	$: tituloActual =
 		paso === pasoRevision
-			? schema?.paso_revision?.titulo || $i18n.t('Review and generate')
-			: pasosDatos.find((p) => p.indice === paso)?.titulo || '';
+			? $i18n.t(schema?.paso_revision?.titulo || 'Review and generate')
+			: $i18n.t(pasosDatos.find((p) => p.indice === paso)?.titulo || '');
 	$: pasoActualCampos = (pasosDatos.find((p) => p.indice === paso)?.campos || []) as PasoSchema['campos'];
 
-	const hoyISO = () => new Date().toISOString().slice(0, 10);
+	// Derived from the schema instead of hard-coding step numbers / option strings.
+	const buscarCampo = (clave: string) =>
+		pasosDatos.flatMap((p) => p.campos).find((c) => c.clave === clave);
+	$: pasoLugar = pasosDatos.find((p) => p.campos.some((c) => c.clave === 'embalses_seleccionados'))
+		?.indice;
+	$: pasoEmbarcacion = pasosDatos.find((p) =>
+		p.campos.some((c) => c.clave === 'embarcacion_declarada_antes')
+	)?.indice;
+	// The "already declared" option is the one that reveals the registration field.
+	$: valorYaDeclarada = (buscarCampo('embarcacion_matricula')?.mostrar_si as any)?.eq?.[1];
+
+	const pad = (n: number) => String(n).padStart(2, '0');
+	// Local date (toISOString would give yesterday's date around midnight in Spain).
+	const hoyISO = () => {
+		const d = new Date();
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+	};
 
 	const aplicarIniciales = (pasos: PasoSchema[]) => {
 		const next = { ...datos };
@@ -86,28 +103,43 @@
 			next.embalses_otros = prev ? `${prev}, ${otros}` : otros;
 		}
 		datos = next;
-		paso = PASO_LUGAR;
+		if (pasoLugar) paso = pasoLugar;
 
 		goto('/declaracion', { replaceState: true, noScroll: true });
 	};
 
-	const hintMatricula = (): string | null => {
-		if (datos.embarcacion_declarada_antes === EMBARCACION_NUEVA || !datos.embarcacion_declarada_antes) {
-			const dni = String(datos.declarante_dni || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-			const digitos = dni.replace(/\D/g, '');
-			if (digitos.length < 3) return null;
-			let letra = '';
-			if (/[A-Z]$/.test(dni)) letra = dni.slice(-1);
-			else if (/^[A-Z]/.test(dni)) letra = dni[0];
-			if (!letra) return null;
-			const corr = Number(datos.embarcacion_correlativo) || 1;
-			const n = Math.max(1, Math.min(999, corr));
-			return `CHMS-${digitos.slice(-3)}-${letra}-${String(n).padStart(3, '0')}`;
-		}
-		return null;
+	// Preview only; the authoritative value comes from the backend in the review step.
+	const hintMatricula = (
+		datos: Record<string, unknown>,
+		valorYaDeclarada: unknown
+	): string | null => {
+		if (datos.embarcacion_declarada_antes === valorYaDeclarada) return null;
+		const dni = String(datos.declarante_dni || '')
+			.replace(/[^0-9A-Za-z]/g, '')
+			.toUpperCase();
+		const digitos = dni.replace(/\D/g, '');
+		if (digitos.length < 3) return null;
+		let letra = '';
+		if (/[A-Z]$/.test(dni)) letra = dni.slice(-1);
+		else if (/^[A-Z]/.test(dni)) letra = dni[0];
+		if (!letra) return null;
+		const corr = Number(datos.embarcacion_correlativo) || 1;
+		const n = Math.max(1, Math.min(999, corr));
+		return `CHMS-${digitos.slice(-3)}-${letra}-${String(n).padStart(3, '0')}`;
 	};
 
-	$: matriculaHint = hintMatricula();
+	$: matriculaHint = hintMatricula(datos, valorYaDeclarada);
+
+	const revisar = async () => {
+		matriculaFinal = '';
+		try {
+			const res = await validarDeclaracion(token, datos);
+			errores = res.errores || [];
+			matriculaFinal = res.matricula || '';
+		} catch (e: any) {
+			toast.error(String(e?.message || e));
+		}
+	};
 
 	onMount(async () => {
 		try {
@@ -148,6 +180,7 @@
 					return;
 				}
 				paso += 1;
+				if (paso === pasoRevision) await revisar();
 			}
 		} catch (e: any) {
 			toast.error(String(e?.message || e));
@@ -161,32 +194,34 @@
 		generating = true;
 		errores = [];
 		try {
-			const res = await validarDeclaracion(token, datos);
-			if (!res.ok) {
-				errores = res.errores || [];
-				toast.error($i18n.t('Fix validation errors before generating'));
-				return;
-			}
+			// The backend validates again in /generar; a 422 carries the structured errors.
 			const { blob, filename } = await generarDeclaracion(token, datos);
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
 			a.download = filename;
 			a.click();
-			URL.revokeObjectURL(url);
+			// Revoking synchronously can abort the download in some browsers.
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
 			toast.success($i18n.t('Declaration downloaded'));
 		} catch (e: any) {
-			toast.error(String(e?.message || e));
+			if (e instanceof ErroresValidacion) {
+				errores = e.errores;
+				toast.error($i18n.t('Fix validation errors before generating'));
+			} else {
+				toast.error(String(e?.message || e));
+			}
 		} finally {
 			generating = false;
 		}
 	};
 
-	const onCargarBorrador = (entrada: BorradorEntrada) => {
+	const onCargarBorrador = async (entrada: BorradorEntrada) => {
 		datos = structuredClone(entrada.dr_datos || {});
 		paso = entrada.dr_paso || 1;
 		errores = [];
 		if (schema) aplicarIniciales(schema.pasos);
+		if (paso === pasoRevision) await revisar();
 	};
 </script>
 
@@ -202,7 +237,7 @@
 			<div
 				class="rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/30 px-4 py-3 text-sm text-sky-950 dark:text-sky-100"
 			>
-				{limitaciones}
+				{$i18n.t(limitaciones)}
 			</div>
 		{/if}
 
@@ -228,20 +263,20 @@
 				class="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200 space-y-1 list-disc list-inside"
 			>
 				{#each errores as err}
-					<li>{err}</li>
+					<li>{traducirError($i18n.t, err)}</li>
 				{/each}
 			</ul>
 		{/if}
 
 		{#if paso < pasoRevision}
 			<PasoForm campos={pasoActualCampos} bind:datos />
-			{#if paso === 2 && matriculaHint}
+			{#if paso === pasoEmbarcacion && matriculaHint}
 				<p class="text-sm text-sky-800 dark:text-sky-200">
 					{$i18n.t('Registration that will be generated')}: <strong>{matriculaHint}</strong>
 				</p>
 			{/if}
 		{:else}
-			<RevisionPanel pasos={pasosDatos} {datos} />
+			<RevisionPanel pasos={pasosDatos} {datos} matricula={matriculaFinal} />
 		{/if}
 
 		<div class="flex flex-wrap gap-2 justify-between pt-2">

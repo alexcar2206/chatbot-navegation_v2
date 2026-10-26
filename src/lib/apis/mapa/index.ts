@@ -15,7 +15,8 @@ export type MapaConsultaResult = {
 
 export type MapaStatus = {
 	available: boolean;
-	cache_path: string;
+	/** Only returned to admins. */
+	cache_path?: string;
 };
 
 const authHeaders = (token: string) => ({

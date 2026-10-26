@@ -3145,5 +3145,7 @@
 	"Selected zones": "Selected zones",
 	"Clear selection": "Clear selection",
 	"Already in the selection": "Already in the selection",
-	"Added to selection": "Added to selection"
+	"Added to selection": "Added to selection",
+	"Save as new draft": "Save as new draft",
+	"Drafts are stored only in this browser and include personal data.": "Drafts are stored only in this browser and include personal data."
 }
