@@ -1,6 +1,4 @@
-.github
 .DS_Store
-docs
 kubernetes
 node_modules
 /.svelte-kit
@@ -10,6 +8,7 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 __pycache__
+.ruff_cache
 .idea
 venv
 _old
@@ -18,3 +17,4 @@ uploads
 **/*.db
 _test
 backend/data/*
+Declaracion.docx

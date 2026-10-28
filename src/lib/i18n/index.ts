@@ -61,7 +61,10 @@ export const initI18n = (defaultLocale?: string | undefined) => {
 				lookupLocalStorage: 'locale'
 			},
 			fallbackLng: {
-				fr: ['fr-FR'],
+				es: ['es-ES'],
+				gl: ['gl-ES'],
+				pt: ['pt-PT'],
+				en: ['en-US'],
 				default: fallbackDefaultLocale
 			},
 			ns: 'translation',

@@ -32,8 +32,6 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./static/static:/app/frontend-src/static:ro
-      # Required by open_webui.env (BASE_DIR/*); not inside ./backend mount
-      - ./CHANGELOG.md:/app/CHANGELOG.md:ro
       - ./package.json:/app/package.json:ro
       - open-webui-dev:/app/backend/data
     ports:

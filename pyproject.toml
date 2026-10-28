@@ -160,7 +160,7 @@ all = [
     "pymongo==4.17.0",
     "psycopg2-binary==2.9.12",
     "pgvector==0.4.2",
-    "playwright==1.60.0", # Caution: version must match docker-compose.playwright.yaml - Update the docker-compose.yaml if necessary
+    "playwright==1.60.0",
     "elasticsearch==9.4.1",
 
     "qdrant-client==1.18.0",
@@ -193,8 +193,6 @@ allow-direct-references = true
 path = "package.json"
 pattern = '"version":\s*"(?P<version>[^"]+)"'
 
-[tool.hatch.build.hooks.custom]  # keep this for reading hooks from `hatch_build.py`
-
 [tool.hatch.build.targets.wheel]
 sources = ["backend"]
 exclude = [
@@ -208,7 +206,7 @@ exclude = [
     "webui.db",
     "chroma.sqlite3",
 ]
-force-include = { "CHANGELOG.md" = "open_webui/CHANGELOG.md", build = "open_webui/frontend" }
+force-include = { build = "open_webui/frontend" }
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file

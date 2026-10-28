@@ -16,6 +16,7 @@ from mapa_i18n_packs import MAPA_KEYS, get_translations
 
 REPO = Path(__file__).resolve().parents[1]
 LOCALES_DIR = REPO / 'src' / 'lib' / 'i18n' / 'locales'
+SUPPORTED_LOCALES = frozenset({'en-US', 'es-ES', 'gl-ES', 'pt-PT'})
 
 
 def sync_file(path: Path, locale: str, force: bool = False) -> int:
@@ -57,6 +58,8 @@ def main() -> int:
     empty_remaining = []
     for path in sorted(LOCALES_DIR.glob('*/translation.json')):
         locale = path.parent.name
+        if locale not in SUPPORTED_LOCALES:
+            continue
         n = sync_file(path, locale, args.force)
         files += 1
         if n:

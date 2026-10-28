@@ -10,10 +10,9 @@ Keys are read from backend/open_webui/navegacion/formulario_dr.py with `ast`
 translation no longer matches any key.
 
 Locales:
-- en-US, en-GB, gl-ES, pt-PT, pt-BR get real translations.
-- es-ES, ca-ES, eu-ES get the Spanish key itself. Without it they would fall
-  back to en-US (English), since returnEmptyString is false.
-- Any other locale falls back to en-US.
+- en-US, gl-ES, pt-PT get real translations.
+- es-ES gets the Spanish key itself. Without it the UI would fall back to
+  en-US (English), since returnEmptyString is false.
 
 Usage: python3 scripts/declaracion_contenido_i18n.py [--force] [--check]
   --force  overwrite existing non-empty values
@@ -33,7 +32,8 @@ REPO = Path(__file__).resolve().parents[1]
 LOCALES_DIR = REPO / 'src' / 'lib' / 'i18n' / 'locales'
 FORMULARIO = REPO / 'backend' / 'open_webui' / 'navegacion' / 'formulario_dr.py'
 
-LOCALES_IDENTIDAD = ('es-ES', 'ca-ES', 'eu-ES')
+SUPPORTED_LOCALES = frozenset({'en-US', 'es-ES', 'gl-ES', 'pt-PT'})
+LOCALES_IDENTIDAD = ('es-ES',)
 
 # Spanish key -> (en, gl, pt-PT, pt-BR or None when equal to pt-PT)
 TRADUCCIONES: dict[str, tuple[str, str, str, str | None]] = {
@@ -397,7 +397,7 @@ TRADUCCIONES: dict[str, tuple[str, str, str, str | None]] = {
 
 
 def _valores_por_locale(en: str, gl: str, pt_pt: str, pt_br: str | None) -> dict[str, str]:
-    return {'en-US': en, 'en-GB': en, 'gl-ES': gl, 'pt-PT': pt_pt, 'pt-BR': pt_br or pt_pt}
+    return {'en-US': en, 'gl-ES': gl, 'pt-PT': pt_pt}
 
 
 def claves_formulario(path: Path = FORMULARIO) -> set[str]:
@@ -514,7 +514,10 @@ def main() -> int:
         return 1
     total = 0
     for path in sorted(LOCALES_DIR.glob('*/translation.json')):
-        n = sync_file(path, path.parent.name, args.force)
+        locale = path.parent.name
+        if locale not in SUPPORTED_LOCALES:
+            continue
+        n = sync_file(path, locale, args.force)
         if n:
             print(f'{path.parent.name}: updated {n} keys')
             total += n

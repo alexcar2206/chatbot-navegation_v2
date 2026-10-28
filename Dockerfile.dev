@@ -32,8 +32,6 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./requirements.txt
-# Fallback when CHANGELOG is not bind-mounted (compose.dev mounts ./CHANGELOG.md → /app/CHANGELOG.md)
-COPY CHANGELOG.md /app/CHANGELOG.md
 
 RUN pip3 install --no-cache-dir uv && \
     pip3 install 'torch<=2.9.1' torchvision torchaudio \

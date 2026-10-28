@@ -179,9 +179,11 @@ try:
     changelog_path = BASE_DIR / 'CHANGELOG.md'
     with open(str(changelog_path.absolute()), encoding='utf8') as file:
         changelog_content = file.read()
-
 except Exception:
-    changelog_content = (pkgutil.get_data('open_webui', 'CHANGELOG.md') or b'').decode()
+    try:
+        changelog_content = (pkgutil.get_data('open_webui', 'CHANGELOG.md') or b'').decode()
+    except Exception:
+        changelog_content = ''
 
 # Convert markdown content to HTML
 html_content = markdown.markdown(changelog_content)
