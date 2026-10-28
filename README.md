@@ -55,11 +55,15 @@ Atajos: `dev:docker:seed`, `dev:docker:ollama`, `dev:docker:full`.
 
 ```bash
 cp .env.example .env
-./scripts/prod-up.sh --build -d
+# Rellenar WEBUI_SECRET_KEY y OPENAI_API_KEY en .env
+# Default: Groq only (ENABLE_OLLAMA_API=false). Sin Ollama.
+npm run prod:docker -- --build -d
 ```
 
 - Interfaz: http://localhost:3000 (o `OPEN_WEBUI_PORT`)
-- Reset total: `docker compose -f docker-compose.yaml down -v`
+- Parar: `npm run prod:docker:down` (añade `-v` para borrar volúmenes)
+
+Atajos: `prod:docker:seed`, `prod:docker:ollama` (requiere `ENABLE_OLLAMA_API=true`), `prod:docker:full`.
 
 ### Login admin (pruebas locales)
 

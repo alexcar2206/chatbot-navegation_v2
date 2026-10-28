@@ -1,8 +1,68 @@
-# Production / demo stack (built image, Ollama, seed).
-# For day-to-day hot-reload development use docker-compose.dev.yaml instead
-# (see README and ./scripts/dev-up.sh).
+# Production / demo stack (built image). Default: open-webui + Groq only.
+# Optional profiles: seed | ollama (heavy RAM — skip on small machines).
+# Usage:
+#   cp .env.example .env   # set WEBUI_SECRET_KEY + OPENAI_API_KEY; ENABLE_OLLAMA_API=false by default
+#   npm run prod:docker             # or ./scripts/prod-up.sh
+#   npm run prod:docker:seed
+#   npm run prod:docker:ollama      # set ENABLE_OLLAMA_API=true in .env
+#   npm run prod:docker:full -- --build -d
+#   npm run prod:docker:down
+# For day-to-day hot-reload development use docker-compose.dev.yaml instead.
 services:
+  open-webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Own image name so `docker compose pull` never replaces this custom build with upstream.
+    image: chatbot-navegation:${WEBUI_DOCKER_TAG:-latest}
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+    ports:
+      - ${OPEN_WEBUI_PORT-3000}:8080
+    env_file:
+      - .env
+    environment:
+      - ENABLE_OLLAMA_API=${ENABLE_OLLAMA_API:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+
+  # Optional: first-boot docs / knowledge / workspace model
+  webui-seed:
+    profiles: ["seed"]
+    image: python:3.12-slim
+    container_name: webui-seed
+    depends_on:
+      - open-webui
+    env_file:
+      - .env
+    environment:
+      - WEBUI_URL=http://open-webui:8080
+      - SEED_DOCS_ZIP_URL=${SEED_DOCS_ZIP_URL:-}
+      - SEED_DOCS_ZIP_SHA256=${SEED_DOCS_ZIP_SHA256:-}
+      - SEED_FORCE=${SEED_FORCE:-false}
+      - SEED_MARKER_PATH=/data/.seed_webui_complete
+      - SEED_MODEL_ID=${SEED_MODEL_ID:-asistente-navegacion-mino}
+      - SEED_BASE_MODEL_ID=${SEED_BASE_MODEL_ID:-openai/gpt-oss-20b}
+      - SEED_MODEL_NAME=${SEED_MODEL_NAME:-Asistente Navegación Miño}
+      - SEED_WAIT_TIMEOUT=${SEED_WAIT_TIMEOUT:-900}
+    volumes:
+      - open-webui:/data
+      - ./scripts/seed_webui.py:/seed/seed_webui.py:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        pip install --no-cache-dir -q requests
+        exec python /seed/seed_webui.py
+    restart: "no"
+
+  # Optional: local LLM (heavy RAM/GPU — skip unless needed)
   ollama:
+    profiles: ["ollama"]
     volumes:
       - ollama:/root/.ollama
     container_name: ollama
@@ -14,6 +74,7 @@ services:
   # One-shot: pull default Ollama models (see OLLAMA_PULL_MODELS / scripts/ollama-pull-defaults.sh).
   # First boot can take several minutes; open-webui does not wait for pulls to finish.
   ollama-init:
+    profiles: ["ollama"]
     image: ollama/ollama:${OLLAMA_DOCKER_TAG-latest}
     container_name: ollama-init
     depends_on:
@@ -43,59 +104,6 @@ services:
           ollama pull "$$model"
         done
         echo "Default Ollama models are ready."
-    restart: "no"
-
-  open-webui:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # Own image name so `docker compose pull` never replaces this custom build with upstream.
-    image: chatbot-navegation:${WEBUI_DOCKER_TAG:-latest}
-    container_name: open-webui
-    volumes:
-      - open-webui:/app/backend/data
-    depends_on:
-      - ollama
-    ports:
-      - ${OPEN_WEBUI_PORT-3000}:8080
-    env_file:
-      - .env
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    restart: unless-stopped
-
-  # One-shot: download docs ZIP, create Knowledge Bases + RAG workspace model via API.
-  # Skips if SEED_DOCS_ZIP_URL is empty, marker exists, or model already present (unless SEED_FORCE).
-  # First boot can take a long time (Open WebUI startup + indexing). Reset with: docker compose down -v
-  webui-seed:
-    image: python:3.12-slim
-    container_name: webui-seed
-    depends_on:
-      - open-webui
-    env_file:
-      - .env
-    environment:
-      - WEBUI_URL=http://open-webui:8080
-      - SEED_DOCS_ZIP_URL=${SEED_DOCS_ZIP_URL:-}
-      - SEED_DOCS_ZIP_SHA256=${SEED_DOCS_ZIP_SHA256:-}
-      - SEED_FORCE=${SEED_FORCE:-false}
-      - SEED_MARKER_PATH=/data/.seed_webui_complete
-      - SEED_MODEL_ID=${SEED_MODEL_ID:-asistente-navegacion-mino}
-      - SEED_BASE_MODEL_ID=${SEED_BASE_MODEL_ID:-openai/gpt-oss-20b}
-      - SEED_MODEL_NAME=${SEED_MODEL_NAME:-Asistente Navegación Miño}
-      - SEED_WAIT_TIMEOUT=${SEED_WAIT_TIMEOUT:-900}
-    volumes:
-      - open-webui:/data
-      - ./scripts/seed_webui.py:/seed/seed_webui.py:ro
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        pip install --no-cache-dir -q requests
-        exec python /seed/seed_webui.py
     restart: "no"
 
 volumes:

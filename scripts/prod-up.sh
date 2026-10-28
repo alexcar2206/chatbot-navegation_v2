@@ -2,9 +2,13 @@
 set -euo pipefail
 
 # Start the production / demo stack (docker-compose.yaml).
-# Extra args are passed to docker compose up, e.g.:
+# --profile must be a docker-compose flag (before `up`), not an `up` flag.
+# Examples:
 #   ./scripts/prod-up.sh -d
 #   ./scripts/prod-up.sh --build
+#   ./scripts/prod-up.sh --profile seed
+#   ./scripts/prod-up.sh --build --profile seed --profile ollama
+#   ENABLE_OLLAMA_API=true ./scripts/prod-up.sh --profile ollama
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -28,4 +32,28 @@ for var in WEBUI_SECRET_KEY WEBUI_ADMIN_PASSWORD; do
   fi
 done
 
-exec docker compose -f docker-compose.yaml --env-file "$ENV_FILE" up "$@"
+COMPOSE_ARGS=()
+UP_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --profile requires a value (seed|ollama)." >&2
+        exit 1
+      fi
+      COMPOSE_ARGS+=(--profile "$2")
+      shift 2
+      ;;
+    --profile=*)
+      COMPOSE_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      UP_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+exec docker compose -f docker-compose.yaml --env-file "$ENV_FILE" \
+  "${COMPOSE_ARGS[@]}" up "${UP_ARGS[@]}"
