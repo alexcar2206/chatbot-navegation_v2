@@ -1,11 +1,35 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 
+export type ZonaEstado = 'permitida' | 'restringida' | 'prohibida' | 'ponars';
+
+export type MapaNavegacion = {
+	estado: ZonaEstado | null;
+	valor_origen: string | null;
+	condiciones: string | null;
+	restricciones: string | null;
+	plazo: string | null;
+	plazo_anios: number | null;
+};
+
+export type MapaUsoEmbalse = 'hidroelectrico' | 'abastecimiento' | 'riego';
+
+export type MapaEmbalse = {
+	rio: string | null;
+	municipio: string | null;
+	usos: MapaUsoEmbalse[];
+	superficie_ha: number | null;
+	volumen_hm3: number | null;
+	titular: string | null;
+	anio: number | null;
+};
+
 export type MapaConsultaResult = {
 	encontrado: boolean;
 	nombre: string | null;
 	embalse_mvp: string | null;
 	en_lista_mvp: boolean;
-	atributos: Record<string, unknown>;
+	navegacion: MapaNavegacion | null;
+	embalse: MapaEmbalse | null;
 	mensaje: string;
 	bounds: [number, number, number, number] | null;
 	indice: number | null;

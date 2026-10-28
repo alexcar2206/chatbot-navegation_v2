@@ -23,7 +23,11 @@ from shapely.geometry import Point
 
 from open_webui.env import DATA_DIR
 from open_webui.navegacion._fs import escribir_json_atomico, escritura_atomica, lock_regeneracion
-from open_webui.navegacion.constants import EMBALSES_OPCION_A
+from open_webui.navegacion.constants import (
+    EMBALSES_OPCION_A,
+    ESTADO_POR_VALOR_NAVEGACION,
+    USOS_EMBALSE,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +58,14 @@ COLUMNAS_NOMBRE = (
     'NomEmbalse',
     'NomZona',
 )
+
+COLUMNA_NAVEGACION = 'Navegacion'
+COLUMNAS_NAVEGACION = (COLUMNA_NAVEGACION, 'Condiciones', 'Restricciones', 'Plazos')
+
+_RE_PLAZO_ANIOS = re.compile(r'\((\d+)\)\s*a[ñn]os?', re.IGNORECASE)
+# Caracteres válidos en topónimos de Galicia/León; cualquier otro delata
+# texto CP850 leído como Latin-1 en el origen (p. ej. «MI¥O» por «MIÑO»).
+_RE_TEXTO_ESPERADO = re.compile(r"[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñºª\s()\-.,/']*")
 
 
 def ruta_docs_pack() -> Path:
@@ -251,6 +263,85 @@ def _es_nulo(valor) -> bool:
     return valor is None or (pd.api.types.is_scalar(valor) and bool(pd.isna(valor)))
 
 
+def _texto_limpio(valor) -> str | None:
+    """Texto sin espacios sobrantes; vacíos y «No procede» se tratan como ausentes."""
+    if _es_nulo(valor):
+        return None
+    texto = re.sub(r'[ \t]+', ' ', str(valor)).strip()
+    if normalizar_nombre(texto) in ('', 'no procede'):
+        return None
+    return texto
+
+
+def _restricciones_limpias(valor) -> str | None:
+    texto = _texto_limpio(valor)
+    if texto and normalizar_nombre(texto).startswith('sin restricciones'):
+        return None
+    return texto
+
+
+def _reparar_cp850(texto: str | None) -> str | None:
+    if not texto or _RE_TEXTO_ESPERADO.fullmatch(texto):
+        return texto
+    try:
+        reparado = texto.encode('latin-1').decode('cp850')
+    except UnicodeError:
+        return texto
+    return reparado if _RE_TEXTO_ESPERADO.fullmatch(reparado) else texto
+
+
+def _plazo_anios(texto: str | None) -> int | None:
+    if not texto:
+        return None
+    coincidencia = _RE_PLAZO_ANIOS.search(texto)
+    return int(coincidencia.group(1)) if coincidencia else None
+
+
+def _usos(valor) -> list[str]:
+    texto = _texto_limpio(valor)
+    if not texto:
+        return []
+    usos: list[str] = []
+    for codigo in texto.upper().split('/'):
+        uso = USOS_EMBALSE.get(codigo.strip())
+        if uso and uso not in usos:
+            usos.append(uso)
+    return usos
+
+
+def _numero_positivo(valor) -> float | None:
+    if _es_nulo(valor):
+        return None
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return None
+    return numero if math.isfinite(numero) and numero > 0 else None
+
+
+def clasificar_navegacion(valor) -> str | None:
+    """Estado (permitida/restringida/prohibida/ponars) del campo ``Navegacion``; None si no se reconoce."""
+    texto = _texto_limpio(valor)
+    if not texto:
+        return None
+    return ESTADO_POR_VALOR_NAVEGACION.get(normalizar_nombre(texto))
+
+
+def resumen_estados(gdf: gpd.GeoDataFrame) -> tuple[dict[str, int], list[str]]:
+    """Recuento por estado y valores de ``Navegacion`` sin clasificar."""
+    if COLUMNA_NAVEGACION not in gdf.columns:
+        return {}, []
+    recuento: dict[str, int] = {}
+    desconocidos: set[str] = set()
+    for valor in gdf[COLUMNA_NAVEGACION]:
+        estado = clasificar_navegacion(valor)
+        if estado:
+            recuento[estado] = recuento.get(estado, 0) + 1
+        else:
+            desconocidos.add(_texto_limpio(valor) or '')
+    return recuento, sorted(desconocidos)
+
+
 def _nombre_desde_fila(fila: gpd.GeoSeries) -> str | None:
     for columna in COLUMNAS_NOMBRE:
         if columna in fila.index:
@@ -351,6 +442,17 @@ def exportar_geodata(
     if gdf.empty:
         raise RuntimeError(f"La capa '{capa_elegida}' no contiene geometrías.")
 
+    faltan = [c for c in COLUMNAS_NAVEGACION if c not in gdf.columns]
+    if faltan:
+        log.error(
+            "La capa '%s' no tiene las columnas de navegación %s; el mapa no mostrará su estado.",
+            capa_elegida,
+            faltan,
+        )
+    estados, desconocidos = resumen_estados(gdf)
+    if desconocidos:
+        log.warning('Valores de %s sin clasificar: %s', COLUMNA_NAVEGACION, desconocidos)
+
     if gdf.crs is None:
         gdf = gdf.set_crs(CRS_ORIGEN_POR_DEFECTO)
     if gdf.crs.to_epsg() != 4326:
@@ -372,6 +474,8 @@ def exportar_geodata(
         'exported_at': datetime.now(timezone.utc).isoformat(),
         'features': len(gdf),
         'crs': 'EPSG:4326',
+        'estados': estados,
+        'valores_navegacion_desconocidos': desconocidos,
     }
     guardar_metadata_geo(destino, meta)
 
@@ -399,12 +503,20 @@ def cargar_zonas(cache_path: Path | None = None) -> gpd.GeoDataFrame:
 
 
 def preparar_zonas(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Añade ``_nombre``, ``_area_m2`` e índices de nombres. Idempotente."""
+    """Añade ``_nombre``, ``_estado``, ``_area_m2`` e índices de nombres. Idempotente."""
     if '_nombre' in gdf.columns and 'indice_nombres' in gdf.attrs:
         return gdf
 
     zonas = gdf.copy()
     zonas['_nombre'] = [_nombre_desde_fila(fila) for _, fila in gdf.iterrows()]
+    if COLUMNA_NAVEGACION in gdf.columns:
+        zonas['_estado'] = [clasificar_navegacion(v) for v in gdf[COLUMNA_NAVEGACION]]
+        _, desconocidos = resumen_estados(gdf)
+        if desconocidos:
+            log.warning('Valores de %s sin clasificar: %s', COLUMNA_NAVEGACION, desconocidos)
+    else:
+        zonas['_estado'] = None
+        log.warning('La capa de zonas no tiene la columna %s', COLUMNA_NAVEGACION)
     try:
         zonas['_area_m2'] = zonas.geometry.to_crs(epsg=CRS_METRICO).area
     except Exception:
@@ -476,7 +588,8 @@ def _resultado_vacio(
         'nombre': None,
         'embalse_mvp': None,
         'en_lista_mvp': False,
-        'atributos': {},
+        'navegacion': None,
+        'embalse': None,
         'mensaje': mensaje,
         'bounds': None,
         'indice': None,
@@ -485,43 +598,36 @@ def _resultado_vacio(
     }
 
 
-def _sanitize_attr_value(valor):
-    """Convert attribute values to JSON-friendly Python scalars."""
-    if _es_nulo(valor):
-        return None
-    if hasattr(valor, 'item') and not isinstance(valor, (str, bytes)):
-        try:
-            valor = valor.item()
-        except (ValueError, AttributeError):
-            pass
-    if isinstance(valor, (bytes, bytearray)) or hasattr(valor, 'geom_type'):
-        return None
-    if isinstance(valor, float):
-        return valor if math.isfinite(valor) else None
-    if isinstance(valor, (bool, int, str)):
-        return valor
-    if hasattr(valor, 'isoformat'):
-        try:
-            return valor.isoformat()
-        except Exception:
-            return str(valor)
-    try:
-        json.dumps(valor)
-        return valor
-    except (TypeError, ValueError, OverflowError):
-        return str(valor)
+def _valor_columna(fila: gpd.GeoSeries, columna: str):
+    return fila[columna] if columna in fila.index else None
 
 
-def _atributos_desde_fila(fila: gpd.GeoSeries) -> dict:
-    atributos = {}
-    for col in fila.index:
-        if col in ('geometry', '_area', '_area_m2', '_nombre') or fila[col] is None:
-            continue
-        sanitized = _sanitize_attr_value(fila[col])
-        if sanitized is None and fila[col] is not None:
-            continue
-        atributos[str(col)] = sanitized
-    return atributos
+def _navegacion_desde_fila(fila: gpd.GeoSeries) -> dict:
+    estado = _valor_columna(fila, '_estado')
+    if _es_nulo(estado):
+        estado = clasificar_navegacion(_valor_columna(fila, COLUMNA_NAVEGACION))
+    plazo = _texto_limpio(_valor_columna(fila, 'Plazos'))
+    return {
+        'estado': estado,
+        'valor_origen': _texto_limpio(_valor_columna(fila, COLUMNA_NAVEGACION)),
+        'condiciones': _texto_limpio(_valor_columna(fila, 'Condiciones')),
+        'restricciones': _restricciones_limpias(_valor_columna(fila, 'Restricciones')),
+        'plazo': plazo,
+        'plazo_anios': _plazo_anios(plazo),
+    }
+
+
+def _embalse_desde_fila(fila: gpd.GeoSeries) -> dict:
+    anio = _numero_positivo(_valor_columna(fila, 'AÑO'))
+    return {
+        'rio': _texto_limpio(_valor_columna(fila, 'RIO')),
+        'municipio': _reparar_cp850(_texto_limpio(_valor_columna(fila, 'MUNICIPIO'))),
+        'usos': _usos(_valor_columna(fila, 'USO')),
+        'superficie_ha': _numero_positivo(_valor_columna(fila, 'SUP_EMBALS')),
+        'volumen_hm3': _numero_positivo(_valor_columna(fila, 'VOLUMEN')),
+        'titular': _texto_limpio(_valor_columna(fila, 'PROPIETARI')),
+        'anio': int(anio) if anio else None,
+    }
 
 
 def _indice_seguro(indice) -> int | str | None:
@@ -544,7 +650,6 @@ def _resultado_desde_fila(fila: gpd.GeoSeries, indice) -> dict:
     else:
         nombre = _nombre_desde_fila(fila)
     embalse_mvp = embalse_en_lista_mvp(nombre)
-    atributos = _atributos_desde_fila(fila)
 
     try:
         geom = fila.geometry
@@ -578,7 +683,8 @@ def _resultado_desde_fila(fila: gpd.GeoSeries, indice) -> dict:
         'nombre': nombre,
         'embalse_mvp': embalse_mvp,
         'en_lista_mvp': embalse_mvp is not None,
-        'atributos': atributos,
+        'navegacion': _navegacion_desde_fila(fila),
+        'embalse': _embalse_desde_fila(fila),
         'mensaje': mensaje,
         'bounds': bounds,
         'indice': _indice_seguro(indice),

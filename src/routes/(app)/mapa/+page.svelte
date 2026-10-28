@@ -38,6 +38,31 @@
 					'Consult the navigation zones of Annex 3 (Miño-Sil): search by name, click the map, coordinates, or your location.'
 				)}
 			</p>
+			<div
+				class="card-brand mb-4 px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-2 border-l-4 border-l-brand-700"
+				role="note"
+				aria-label={$i18n.t('Zone status legend')}
+			>
+				<span class="font-medium text-brand-800 dark:text-brand-100">
+					{$i18n.t('Zone status legend')}
+				</span>
+				<span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+					<span class="size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+					{$i18n.t('Allowed navigation')}
+				</span>
+				<span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+					<span class="size-2.5 rounded-full bg-amber-500" aria-hidden="true" />
+					{$i18n.t('Restricted navigation')}
+				</span>
+				<span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+					<span class="size-2.5 rounded-full bg-red-500" aria-hidden="true" />
+					{$i18n.t('Prohibited navigation')}
+				</span>
+				<span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+					<span class="size-2.5 rounded-full bg-violet-500" aria-hidden="true" />
+					{$i18n.t('Regulated by PONARS')}
+				</span>
+			</div>
 			<MapaZonas token={localStorage.token} />
 		</div>
 	</div>

@@ -44,6 +44,13 @@
 			? $i18n.t(schema?.paso_revision?.titulo || 'Review and generate')
 			: $i18n.t(pasosDatos.find((p) => p.indice === paso)?.titulo || '');
 	$: pasoActualCampos = (pasosDatos.find((p) => p.indice === paso)?.campos || []) as PasoSchema['campos'];
+	$: pasosIndicador = [
+		...pasosDatos.map((p) => ({ indice: p.indice, titulo: p.titulo })),
+		{
+			indice: pasoRevision,
+			titulo: schema?.paso_revision?.titulo || 'Review and generate'
+		}
+	];
 
 	// Derived from the schema instead of hard-coding step numbers / option strings.
 	const buscarCampo = (clave: string) =>
@@ -243,16 +250,54 @@
 
 		<BorradoresPanel {datos} {paso} onCargar={onCargarBorrador} />
 
-		<div class="space-y-2">
+		<div class="space-y-3">
+			<ol
+				class="flex flex-wrap items-start gap-1 sm:gap-0 sm:justify-between"
+				aria-label={$i18n.t('Declaration wizard steps')}
+			>
+				{#each pasosIndicador as item, idx (item.indice)}
+					{@const done = paso > item.indice}
+					{@const active = paso === item.indice}
+					<li class="flex items-center gap-1 sm:flex-1 sm:min-w-0 sm:flex-col sm:gap-1.5">
+						<div class="flex items-center gap-1 sm:flex-col sm:w-full">
+							<span
+								class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold border-2 transition {done
+									? 'bg-accent-500 border-accent-500 text-white'
+									: active
+										? 'bg-brand-700 border-brand-700 text-white'
+										: 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500'}"
+								aria-current={active ? 'step' : undefined}
+							>
+								{idx + 1}
+							</span>
+							{#if idx < pasosIndicador.length - 1}
+								<span
+									class="hidden sm:block h-0.5 flex-1 mx-1 rounded-full {done
+										? 'bg-accent-400'
+										: 'bg-gray-200 dark:bg-gray-800'}"
+									aria-hidden="true"
+								/>
+							{/if}
+						</div>
+						<span
+							class="hidden sm:block text-[0.65rem] leading-tight text-center px-0.5 line-clamp-2 w-full {active
+								? 'text-brand-800 dark:text-brand-100 font-medium'
+								: 'text-gray-500 dark:text-gray-400'}"
+						>
+							{$i18n.t(item.titulo)}
+						</span>
+					</li>
+				{/each}
+			</ol>
 			<div class="flex items-center justify-between gap-2 text-sm">
 				<span class="font-medium">
 					{$i18n.t('Step')} {paso} {$i18n.t('of')} {totalPasos}: {tituloActual}
 				</span>
 				<span class="text-gray-500">{Math.round((paso / totalPasos) * 100)}%</span>
 			</div>
-			<div class="h-2 rounded-full bg-gray-100 dark:bg-gray-850 overflow-hidden">
+			<div class="h-2 rounded-full bg-brand-100 dark:bg-brand-950 overflow-hidden">
 				<div
-					class="h-full bg-gray-900 dark:bg-gray-100 transition-all"
+					class="h-full bg-brand-700 dark:bg-accent-500 transition-all"
 					style="width: {(paso / totalPasos) * 100}%"
 				/>
 			</div>
@@ -276,6 +321,14 @@
 				</p>
 			{/if}
 		{:else}
+			<div class="card-brand border-l-4 border-l-accent-500 px-4 py-3 space-y-1">
+				<h2 class="text-sm font-semibold text-brand-800 dark:text-brand-100">
+					{$i18n.t('Declaration summary')}
+				</h2>
+				<p class="text-xs text-gray-500 dark:text-gray-400">
+					{$i18n.t('Review your answers below, then generate the official DOCX.')}
+				</p>
+			</div>
 			<RevisionPanel pasos={pasosDatos} {datos} matricula={matriculaFinal} />
 		{/if}
 
@@ -293,7 +346,7 @@
 				{#if paso < pasoRevision}
 					<button
 						type="button"
-						class="rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-4 py-2 text-sm font-medium disabled:opacity-40"
+						class="rounded-xl btn-brand px-4 py-2 text-sm font-medium disabled:opacity-40"
 						disabled={busy || generating}
 						on:click={siguiente}
 					>
@@ -302,7 +355,7 @@
 				{:else}
 					<button
 						type="button"
-						class="rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-4 py-2 text-sm font-medium disabled:opacity-40"
+						class="rounded-xl btn-brand px-4 py-2 text-sm font-medium disabled:opacity-40"
 						disabled={generating}
 						on:click={generar}
 					>

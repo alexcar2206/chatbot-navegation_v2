@@ -32,3 +32,20 @@ EMBALSES_OPCION_A = [
     'Vilasouto',
     'Villaseca',
 ]
+
+# Valores del campo ``Navegacion`` del Anexo 3, normalizados con
+# ``geozona.normalizar_nombre``. Un valor no listado no se clasifica.
+ESTADO_POR_VALOR_NAVEGACION = {
+    'si': 'permitida',
+    'si condicionado': 'restringida',
+    'solo remos y vela': 'restringida',
+    'sujeto a ponars': 'ponars',
+    'no': 'prohibida',
+}
+
+# Códigos del campo ``USO`` (pueden venir combinados, p. ej. ``I/S/H``).
+USOS_EMBALSE = {
+    'H': 'hidroelectrico',
+    'S': 'abastecimiento',
+    'I': 'riego',
+}
