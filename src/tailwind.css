@@ -22,6 +22,33 @@
 	--color-gray-850: oklch(0.27 0 0);
 	--color-gray-900: oklch(0.2 0 0);
 	--color-gray-950: oklch(0.16 0 0);
+
+	/* Río Miño brand palette (Phase 2a) */
+	--color-brand-50: #e8f1f5;
+	--color-brand-100: #d1e3eb;
+	--color-brand-200: #a3c7d7;
+	--color-brand-300: #75abc3;
+	--color-brand-400: #478faf;
+	--color-brand-500: #1f7395;
+	--color-brand-600: #156182;
+	--color-brand-700: #0b4f6c;
+	--color-brand-800: #083d54;
+	--color-brand-900: #042a3a;
+	--color-brand-950: #021820;
+
+	--color-accent-50: #e8f7f5;
+	--color-accent-100: #d1efeb;
+	--color-accent-200: #a3dfd7;
+	--color-accent-300: #75cfc3;
+	--color-accent-400: #47bfaf;
+	--color-accent-500: #2bb3a3;
+	--color-accent-600: #249688;
+	--color-accent-700: #1d796d;
+	--color-accent-800: #165c52;
+	--color-accent-900: #0f3f38;
+	--color-accent-950: #082820;
+
+	--color-warm-50: #f4efe6;
 }
 
 /*

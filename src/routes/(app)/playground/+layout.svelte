@@ -1,11 +1,16 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import { onMount, getContext } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { WEBUI_NAME, showSidebar, mobile } from '$lib/stores';
 	import { page } from '$app/stores';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Sidebar from '$lib/components/icons/Sidebar.svelte';
 
 	const i18n = getContext('i18n');
+
+	onMount(async () => {
+		await goto('/', { replaceState: true });
+	});
 </script>
 
 <svelte:head>

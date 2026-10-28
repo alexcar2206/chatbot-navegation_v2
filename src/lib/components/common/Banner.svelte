@@ -25,8 +25,8 @@
 	let mounted = false;
 
 	const classNames: Record<string, string> = {
-		info: 'bg-blue-500/20 text-blue-700 dark:text-blue-200 ',
-		success: 'bg-green-500/20 text-green-700 dark:text-green-200',
+		info: 'bg-brand-100/80 text-brand-800 dark:bg-brand-900/50 dark:text-brand-100',
+		success: 'bg-accent-500/15 text-accent-800 dark:text-accent-200',
 		warning: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200',
 		error: 'bg-red-500/20 text-red-700 dark:text-red-200'
 	};
@@ -46,7 +46,7 @@
 {#if !dismissed}
 	{#if mounted}
 		<div
-			class="{className} top-0 left-0 right-0 py-1 flex justify-center items-center relative border border-transparent text-gray-800 dark:text-gary-100 bg-transparent backdrop-blur-xl z-30"
+			class="{className} top-0 left-0 right-0 py-1.5 flex justify-center items-center relative border border-brand-200/50 dark:border-brand-800/40 border-l-[3px] border-l-accent-500 text-gray-800 dark:text-gray-100 bg-brand-50/35 dark:bg-brand-950/25 backdrop-blur-xl z-30"
 			transition:fade={{ delay: 100, duration: 300 }}
 		>
 			<div class=" flex flex-col md:flex-row md:items-center flex-1 text-sm w-fit gap-1.5">

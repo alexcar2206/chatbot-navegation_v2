@@ -20,6 +20,8 @@
 			$page.url.pathname.includes('/admin/functions')
 		) {
 			await goto('/admin', { replaceState: true });
+		} else if ($page.url.pathname.includes('/admin/evaluations')) {
+			await goto('/admin', { replaceState: true });
 		}
 		loaded = true;
 	});
@@ -74,14 +76,6 @@
 								? ''
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
 							href="/admin">{$i18n.t('Users')}</a
-						>
-
-						<a
-							draggable="false"
-							class="min-w-fit px-1 text-sm {$page.url.pathname.includes('/admin/evaluations')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
-							href="/admin/evaluations">{$i18n.t('Evaluations')}</a
 						>
 
 						{#if $config?.features?.enable_plugins}

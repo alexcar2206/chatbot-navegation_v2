@@ -2,10 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<!-- LICENSE covers this Open WebUI branding surface, including name, logo,
-		visual, textual, symbolic identifiers, metadata, and surrounding UI.
-		Do not alter, remove, obscure, or replace it except as LICENSE permits:
-		https://docs.openwebui.com/license. -->
+		<!-- Application branding surface: name, logo, metadata, and splash UI. -->
 		<link rel="icon" type="image/png" href="/static/favicon.png" crossorigin="use-credentials" />
 		<link
 			rel="icon"
@@ -84,9 +81,7 @@
 					metaThemeColorTag.setAttribute('content', BRAND_PRIMARY);
 				}
 
-				// LICENSE covers these Open WebUI splash logo assets.
-				// Do not alter, remove, obscure, or replace them except as LICENSE permits:
-				// https://docs.openwebui.com/license.
+				// Splash logo assets (see static/splash*.png).
 				const preloadHref = document.documentElement.classList.contains('dark')
 					? '/static/splash-dark.png'
 					: '/static/splash.png';
@@ -118,9 +113,7 @@
 					'position: absolute; width: auto; height: 6rem; top: 44%; left: 50%; transform: translateX(-50%); display:block;';
 				logo.loading = 'eager';
 				logo.fetchPriority = 'high';
-				// LICENSE covers this Open WebUI splash logo.
-				// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-				// https://docs.openwebui.com/license.
+				// Splash logo (see static/splash*.png).
 				logo.src = isDarkMode ? '/static/splash-dark.png' : '/static/splash.png';
 
 				document.addEventListener('DOMContentLoaded', function () {
@@ -134,7 +127,7 @@
 			})();
 		</script>
 
-		<title>Open WebUI</title>
+		<title>Chatbot Navegación Miño-Sil</title>
 
 		%sveltekit.head%
 	</head>
@@ -166,9 +159,7 @@
 					align-items: center;
 				"
 			>
-				<!-- LICENSE covers this Open WebUI splash logo.
-				Do not alter, remove, obscure, or replace it except as LICENSE permits:
-				https://docs.openwebui.com/license. -->
+				<!-- Splash logo (see static/splash.png). -->
 				<img
 					id="logo-her"
 					style="width: auto; height: 13rem"
@@ -221,8 +212,10 @@
 		   Also used by static/custom.css. */
 		:root {
 			--brand-primary: #0b4f6c;
+			--brand-accent: #2bb3a3;
 			--brand-surface-light: #e8f1f5;
 			--brand-surface-dark: #042a3a;
+			--brand-body-surface: #f4efe6;
 		}
 
 		#splash-screen {

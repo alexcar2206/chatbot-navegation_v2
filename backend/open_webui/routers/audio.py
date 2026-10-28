@@ -46,7 +46,10 @@ from open_webui.env import (
     DEVICE_TYPE,
     ENABLE_FORWARD_USER_INFO_HEADERS,
     ENV,
+    WEBUI_NAME,
 )
+
+_CONNECTION_ERROR = f'{WEBUI_NAME}: Server Connection Error'
 from open_webui.events import EVENTS, publish_event
 from open_webui.models.config import Config
 from open_webui.utils.access_control import has_permission
@@ -332,7 +335,7 @@ async def _raise_tts_error(exc: Exception, r=None) -> None:
     # LICENSE covers this Open WebUI error identifier.
     # Do not alter, remove, obscure, or replace it except as LICENSE permits:
     # https://docs.openwebui.com/license.
-    detail = 'Open WebUI: Server Connection Error'
+    detail = _CONNECTION_ERROR
     if r is not None:
         try:
             res = await r.json()
@@ -716,7 +719,7 @@ async def _transcribe_openai(request, file_path, filename, languages, file_dir, 
         # LICENSE covers this Open WebUI error identifier.
         # Do not alter, remove, obscure, or replace it except as LICENSE permits:
         # https://docs.openwebui.com/license.
-        raise Exception(detail if detail else 'Open WebUI: Server Connection Error')
+        raise Exception(detail if detail else _CONNECTION_ERROR)
 
 
 async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
@@ -769,7 +772,7 @@ async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
         # LICENSE covers this Open WebUI error identifier.
         # Do not alter, remove, obscure, or replace it except as LICENSE permits:
         # https://docs.openwebui.com/license.
-        detail = 'Open WebUI: Server Connection Error'
+        detail = _CONNECTION_ERROR
         if r is not None:
             try:
                 res = await r.json()
@@ -903,7 +906,7 @@ async def _transcribe_azure(request, file_path, filename, file_dir, id):
         # https://docs.openwebui.com/license.
         raise HTTPException(
             status_code=e.status if e.status else 500,
-            detail=detail if detail else 'Open WebUI: Server Connection Error',
+            detail=detail if detail else _CONNECTION_ERROR,
         )
 
 
@@ -1072,7 +1075,7 @@ async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, 
         # https://docs.openwebui.com/license.
         raise HTTPException(
             status_code=e.status if e.status else 500,
-            detail=detail if detail else 'Open WebUI: Server Connection Error',
+            detail=detail if detail else _CONNECTION_ERROR,
         )
 
 

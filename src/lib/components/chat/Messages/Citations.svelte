@@ -149,6 +149,14 @@
 			return str;
 		}
 	};
+
+	// Knowledge-base sources arrive as type 'collection'; files uploaded to the chat as 'file'.
+	const isKnowledgeCitation = (citation: { source?: { name?: string; type?: string } }) => {
+		const name = citation?.source?.name ?? '';
+		return citation?.source?.type === 'collection' && name.length > 0 && !name.startsWith('http');
+	};
+
+	$: knowledgeCitationCount = citations.filter(isKnowledgeCitation).length;
 </script>
 
 <CitationModal
@@ -162,7 +170,10 @@
 	{@const urlCitations = citations.filter((c) => c?.source?.name?.startsWith('http'))}
 	<div class=" py-1 -mx-0.5 w-full flex gap-1 items-center flex-wrap">
 		<button
-			class="text-xs font-normal text-gray-600 dark:text-gray-300 px-3.5 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-1 border border-gray-50 dark:border-gray-850/30"
+			class="text-xs font-normal px-3.5 h-8 rounded-full transition flex items-center gap-1.5 border {knowledgeCitationCount ===
+			citations.length
+				? 'text-brand-800 dark:text-brand-100 border-brand-200/80 dark:border-brand-700/50 bg-brand-50/80 dark:bg-brand-950/40 hover:bg-brand-100/80 dark:hover:bg-brand-900/50'
+				: 'text-gray-600 dark:text-gray-300 border-gray-50 dark:border-gray-850/30 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 			aria-label={citations.length === 1
 				? $i18n.t('Toggle 1 source')
 				: $i18n.t('Toggle {{COUNT}} sources', { COUNT: citations.length })}
@@ -196,14 +207,23 @@
 					{/if}
 				</div>
 			{/if}
-			<div>
-				{#if citations.length === 1}
-					{$i18n.t('1 Source')}
-				{:else}
-					{$i18n.t('{{COUNT}} Sources', {
-						COUNT: citations.length
-					})}
+			<div class="flex items-center gap-1.5">
+				{#if knowledgeCitationCount > 0}
+					<span
+						class="text-[0.65rem] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-accent-500/15 text-accent-700 dark:text-accent-300 border border-accent-500/25"
+					>
+						{$i18n.t('Regulations')}
+					</span>
 				{/if}
+				<span>
+					{#if citations.length === 1}
+						{$i18n.t('1 Source')}
+					{:else}
+						{$i18n.t('{{COUNT}} Sources', {
+							COUNT: citations.length
+						})}
+					{/if}
+				</span>
 			</div>
 		</button>
 	</div>
@@ -218,7 +238,7 @@
 					aria-label={$i18n.t('View source: {{name}}', {
 						name: decodeString(citation.source.name)
 					})}
-					class="no-toggle outline-hidden flex dark:text-gray-300 bg-transparent text-gray-600 rounded-xl gap-1.5 items-center"
+					class="no-toggle outline-hidden flex dark:text-gray-300 bg-transparent text-gray-600 rounded-xl gap-1.5 items-center w-full"
 					on:click={() => {
 						showCitationModal = true;
 						selectedCitation = citation;
@@ -227,6 +247,13 @@
 					<div class=" font-normal bg-gray-50 dark:bg-gray-850 rounded-md px-1">
 						{idx + 1}
 					</div>
+					{#if isKnowledgeCitation(citation)}
+						<span
+							class="shrink-0 text-[0.65rem] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-accent-500/15 text-accent-700 dark:text-accent-300 border border-accent-500/25"
+						>
+							{$i18n.t('Regulations')}
+						</span>
+					{/if}
 					<div
 						class="flex-1 truncate hover:text-black dark:text-white/60 dark:hover:text-white transition text-left"
 					>

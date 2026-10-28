@@ -188,7 +188,8 @@
 					($user?.role === 'admin' || $user?.permissions?.features?.calendar)
 				);
 			case 'playground':
-				return $user?.role === 'admin';
+				// Hidden for CHMS deploy (no ENABLE_* flag in upstream).
+				return false;
 			default:
 				return false;
 		}
@@ -1139,9 +1140,9 @@
 			inert={!$showSidebar}
 			class="h-screen max-h-[100dvh] min-h-screen select-none {$mobile
 				? visible
-					? 'bg-[var(--brand-primary)] dark:bg-gray-950 z-50'
+					? 'bg-[var(--brand-primary)] dark:bg-brand-900 z-50'
 					: 'bg-transparent z-0 pointer-events-none'
-				: `bg-[var(--brand-primary)] dark:bg-gray-950 z-50 ${$showSidebar ? '' : 'pointer-events-none'}`} {$isApp
+				: `bg-[var(--brand-primary)] dark:bg-brand-900 z-50 ${$showSidebar ? '' : 'pointer-events-none'}`} {$isApp
 				? `ml-[4.5rem] md:ml-0 `
 				: $mobile
 					? ''
@@ -1208,7 +1209,7 @@
 					<div
 						class="{scrollTop > 0
 							? 'visible'
-							: 'invisible'} sidebar-bg-gradient-to-b bg-linear-to-b from-[var(--brand-primary)] dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mb-6"
+							: 'invisible'} sidebar-bg-gradient-to-b bg-linear-to-b from-[var(--brand-primary)] dark:from-brand-900 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mb-6"
 					></div>
 				</div>
 
@@ -1721,9 +1722,22 @@
 
 				<div class="px-1 pt-1 pb-1.5 sticky bottom-0 z-10 -mt-2 sidebar">
 					<div
-						class=" sidebar-bg-gradient-to-t bg-linear-to-t from-[var(--brand-primary)] dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mt-6"
+						class=" sidebar-bg-gradient-to-t bg-linear-to-t from-[var(--brand-primary)] dark:from-brand-900 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mt-6"
 					></div>
 					<div class="flex flex-col">
+						<a
+							href="https://www.miteco.gob.es"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="px-2 py-2 mb-1 rounded-lg hover:bg-white/10 transition"
+							aria-label={`${$i18n.t('Government of Spain')} — ${$i18n.t('Ministry for the Ecological Transition and the Demographic Challenge')}`}
+						>
+							<img
+								src="{WEBUI_BASE_URL}/static/institucional/footer-gobierno.svg"
+								alt={$i18n.t('Government of Spain')}
+								class="w-full max-h-10 object-contain object-left opacity-90 brightness-0 invert"
+							/>
+						</a>
 						{#if $user !== undefined && $user !== null}
 							<UserMenu
 								role={$user?.role}

@@ -5,6 +5,7 @@
 
 	import { onMount, getContext, tick, createEventDispatcher } from 'svelte';
 	import { blur, fade } from 'svelte/transition';
+	import { goto } from '$app/navigation';
 
 	const dispatch = createEventDispatcher();
 
@@ -19,6 +20,7 @@
 	} from '$lib/stores';
 	import { refreshChatList, refreshFolderChatLists } from '$lib/stores/chatList';
 	import { sanitizeResponseContent, extractCurlyBraceWords } from '$lib/utils';
+	import { featureNavegacionDisponible } from '$lib/utils/navegacion';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 
 	import Suggestions from './Suggestions.svelte';
@@ -92,6 +94,23 @@
 		$selectedFolder != null &&
 		$selectedFolder.user_id !== $user?.id &&
 		$selectedFolder.permission !== 'write';
+
+	$: modelDescription = models[selectedModelIdx]?.info?.meta?.description ?? null;
+	$: showHomeQuickActions =
+		!$selectedFolder && !modelDescription && !atSelectedModel;
+
+	const onConsultarNormativa = async () => {
+		const text = $i18n.t(
+			'What regulations apply to navigation in reservoirs in the Miño-Sil demarcation?'
+		);
+		if (onSelect) {
+			onSelect({ type: 'prompt', data: text });
+		} else {
+			prompt = text;
+			await tick();
+			messageInput?.focus?.({ preventScroll: true });
+		}
+	};
 </script>
 
 <div class="m-auto w-full max-w-[58rem] px-1 @2xl:px-20 translate-y-6 py-24 text-center">
@@ -123,6 +142,16 @@
 					}}
 				/>
 			{:else}
+				<div class="flex flex-col items-center gap-2 mb-3" in:fade={{ duration: 100 }}>
+					<img
+						src="{WEBUI_BASE_URL}/static/institucional/cabecera-ministerio.svg"
+						alt={$i18n.t('Ministry for the Ecological Transition and the Demographic Challenge')}
+						class="h-8 sm:h-10 w-auto max-w-md object-contain opacity-90 dark:brightness-0 dark:invert dark:opacity-80"
+					/>
+					<div class="text-xs text-gray-500 dark:text-gray-400">
+						{$i18n.t('Miño-Sil Hydrographic Confederation')}
+					</div>
+				</div>
 				<div class="flex flex-row justify-center gap-2.5 @sm:gap-3 w-fit px-5 max-w-xl">
 					<div class="flex shrink-0 justify-center">
 						<div class="flex -space-x-4 mb-0.5" in:fade={{ duration: 100 }}>
@@ -179,6 +208,54 @@
 						{/if}
 					</div>
 				</div>
+
+				{#if showHomeQuickActions}
+					<div
+						class="flex flex-wrap justify-center gap-2 mt-3 mb-1 max-w-xl px-2"
+						in:fade={{ duration: 100, delay: 80 }}
+					>
+						<button
+							type="button"
+							class="card-brand px-3 py-2.5 text-left text-sm hover:border-brand-300 dark:hover:border-brand-600 transition flex-1 min-w-[9rem] max-w-[11rem]"
+							on:click={onConsultarNormativa}
+						>
+							<span class="block font-medium text-brand-800 dark:text-brand-100">
+								{$i18n.t('Consult regulations')}
+							</span>
+							<span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+								{$i18n.t('Miño-Sil norms and navigation rules')}
+							</span>
+						</button>
+						{#if featureNavegacionDisponible($config, $user, 'mapa')}
+							<button
+								type="button"
+								class="card-brand px-3 py-2.5 text-left text-sm hover:border-brand-300 dark:hover:border-brand-600 transition flex-1 min-w-[9rem] max-w-[11rem]"
+								on:click={() => goto('/mapa')}
+							>
+								<span class="block font-medium text-brand-800 dark:text-brand-100">
+									{$i18n.t('View zone map')}
+								</span>
+								<span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+									{$i18n.t('Annex 3 navigation zones')}
+								</span>
+							</button>
+						{/if}
+						{#if featureNavegacionDisponible($config, $user, 'declaracion')}
+							<button
+								type="button"
+								class="card-brand px-3 py-2.5 text-left text-sm hover:border-brand-300 dark:hover:border-brand-600 transition flex-1 min-w-[9rem] max-w-[11rem]"
+								on:click={() => goto('/declaracion')}
+							>
+								<span class="block font-medium text-brand-800 dark:text-brand-100">
+									{$i18n.t('Responsible declaration')}
+								</span>
+								<span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+									{$i18n.t('Generate official DOCX')}
+								</span>
+							</button>
+						{/if}
+					</div>
+				{/if}
 
 				<div class="flex mt-1 mb-2">
 					<div in:fade={{ duration: 100, delay: 50 }}>

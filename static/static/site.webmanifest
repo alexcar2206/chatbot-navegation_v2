@@ -1,6 +1,6 @@
 {
-  "name": "Open WebUI",
-  "short_name": "WebUI",
+  "name": "Chatbot Navegación Miño-Sil",
+  "short_name": "Navegación Miño-Sil",
   "icons": [
     {
       "src": "/static/web-app-manifest-192x192.png",
@@ -15,7 +15,7 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
+  "theme_color": "#0b4f6c",
+  "background_color": "#e8f1f5",
   "display": "standalone"
 }

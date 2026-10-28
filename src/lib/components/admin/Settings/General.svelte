@@ -10,7 +10,7 @@
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
-	import { banners as _banners, config, showChangelog } from '$lib/stores';
+	import { banners as _banners, config } from '$lib/stores';
 	import type { Banner } from '$lib/types';
 	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
@@ -112,29 +112,15 @@
 							<Tooltip content={WEBUI_BUILD_HASH}>v{WEBUI_VERSION}</Tooltip>
 
 							{#if $config?.features?.enable_version_update_check}
-								<a
-									href="https://github.com/open-webui/open-webui/releases/tag/v{version.latest}"
-									target="_blank"
-									class="text-gray-500 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300"
-								>
+								<span class="text-gray-500 dark:text-gray-500">
 									{updateAvailable === null
 										? $i18n.t('Checking for updates...')
 										: updateAvailable
 											? `(v${version.latest} ${$i18n.t('available!')})`
 											: $i18n.t('(latest)')}
-								</a>
+								</span>
 							{/if}
 						</div>
-
-						<button
-							class="mt-0.5 text-xs text-gray-400 transition-colors hover:text-gray-700 dark:text-gray-600 dark:hover:text-gray-300"
-							type="button"
-							on:click={() => {
-								showChangelog.set(true);
-							}}
-						>
-							{$i18n.t("See what's new")}
-						</button>
 					</div>
 
 					{#if $config?.features?.enable_version_update_check}
@@ -150,86 +136,8 @@
 					{/if}
 				</div>
 
-				<div class="text-xs">
-					<div class="flex items-start justify-between gap-4">
-						<div class="min-w-0">
-							<div class="text-gray-600 dark:text-gray-400">{$i18n.t('Help')}</div>
-							<div class="mt-0.5 text-gray-400 dark:text-gray-600">
-								<!-- LICENSE covers this Open WebUI wordmark.
-								Do not alter, remove, obscure, or replace it except as LICENSE permits:
-								https://docs.openwebui.com/license. -->
-								{$i18n.t('Discover how to use Open WebUI and seek support from the community.')}
-							</div>
-						</div>
-
-						<a
-							class="shrink-0 text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-500 dark:hover:text-white"
-							href="https://docs.openwebui.com/"
-							target="_blank"
-						>
-							{$i18n.t('Documentation')}
-						</a>
-					</div>
-
-					<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-gray-400 dark:text-gray-600">
-						<a
-							class="hover:text-gray-700 dark:hover:text-gray-300"
-							href="https://discord.gg/5rJgQTnV4s"
-							target="_blank">Discord</a
-						>
-						<a
-							class="hover:text-gray-700 dark:hover:text-gray-300"
-							href="https://twitter.com/OpenWebUI"
-							target="_blank">X</a
-						>
-						<a
-							class="hover:text-gray-700 dark:hover:text-gray-300"
-							href="https://github.com/open-webui/open-webui"
-							target="_blank">GitHub</a
-						>
-					</div>
-				</div>
-
-				<div class="text-xs">
-					<!-- LICENSE covers this Open WebUI license attribution.
-					Do not alter, remove, obscure, or replace it except as LICENSE permits:
-					https://docs.openwebui.com/license. -->
-					<div class="text-gray-600 dark:text-gray-400">{$i18n.t('License')}</div>
-
-					{#if $config?.license_metadata}
-						<a
-							href="https://docs.openwebui.com/enterprise"
-							target="_blank"
-							class="mt-0.5 block text-gray-500"
-						>
-							<span class="capitalize text-black dark:text-white"
-								>{$config?.license_metadata?.type} license</span
-							>
-							registered to
-							<span class="capitalize text-black dark:text-white"
-								>{$config?.license_metadata?.organization_name}</span
-							>
-							for
-							<span class="text-black dark:text-white"
-								>{$config?.license_metadata?.seats ?? 'Unlimited'} users.</span
-							>
-						</a>
-						{#if $config?.license_metadata?.html}
-							<div class="mt-0.5 text-gray-500">
-								{@html DOMPurify.sanitize($config?.license_metadata?.html)}
-							</div>
-						{/if}
-					{:else}
-						<a
-							class="mt-0.5 block text-gray-400 transition-colors hover:text-gray-700 dark:text-gray-600 dark:hover:text-gray-300"
-							href="https://docs.openwebui.com/enterprise"
-							target="_blank"
-						>
-							{$i18n.t(
-								'Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.'
-							)}
-						</a>
-					{/if}
+				<div class="text-xs text-gray-600 dark:text-gray-400">
+					{$i18n.t('Miño-Sil Hydrographic Confederation')}
 				</div>
 			</AdminSettingSection>
 

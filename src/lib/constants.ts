@@ -1,10 +1,6 @@
 // import { version } from '../../package.json';
 
-// LICENSE covers this Open WebUI branding surface, including name, logo,
-// visual, textual, symbolic identifiers, metadata, and surrounding UI.
-// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-// https://docs.openwebui.com/license.
-export const APP_NAME = 'Open WebUI';
+export const APP_NAME = 'Chatbot Navegación Miño-Sil';
 
 export const WEBUI_HOSTNAME = '';
 export const WEBUI_BASE_URL = '';
@@ -123,12 +119,14 @@ export const DEFAULT_CAPABILITIES = {
 
 export const PASTED_TEXT_CHARACTER_LIMIT = 1000;
 
-// Chatbot Navegation / Miño-Sil palette. src/app.html cannot import this module
-// and repeats these values (inline script and --brand-* CSS variables).
+// Río Miño palette (Phase 2a). src/app.html cannot import this module and repeats
+// primary/surface values in its inline script and --brand-* CSS variables.
 export const BRAND_COLORS = {
 	primary: '#0b4f6c',
+	accent: '#2bb3a3',
 	surfaceLight: '#e8f1f5',
-	surfaceDark: '#042a3a'
+	surfaceDark: '#042a3a',
+	bodySurface: '#f4efe6'
 } as const;
 
 // Source: https://kit.svelte.dev/docs/modules#$env-static-public

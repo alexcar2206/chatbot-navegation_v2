@@ -222,13 +222,36 @@
 />
 
 <div class="w-full h-screen max-h-[100dvh] text-white relative" id="auth-page">
-	<div class="w-full h-full absolute top-0 left-0 bg-white dark:bg-black"></div>
+	<div class="w-full h-full absolute top-0 left-0 bg-[var(--brand-body-surface,#f4efe6)] dark:bg-brand-900"></div>
+
+	<!-- Institutional header (AGE / MITECO) -->
+	<header
+		class="fixed top-0 inset-x-0 z-[60] bg-white border-b border-gray-200 px-4 sm:px-8 py-3 flex items-center justify-between gap-4"
+	>
+		<img
+			src="{WEBUI_BASE_URL}/static/institucional/cabecera-ministerio.svg"
+			alt={$i18n.t('Ministry for the Ecological Transition and the Demographic Challenge')}
+			class="h-10 sm:h-12 w-auto max-w-[70%] object-contain object-left"
+		/>
+		<div class="flex items-center gap-2 shrink-0">
+			<img
+				id="logo"
+				crossorigin="anonymous"
+				src="{WEBUI_BASE_URL}/static/favicon.png"
+				class="size-9 sm:size-10 rounded-xl"
+				alt="{$WEBUI_NAME} logo"
+			/>
+			<span class="hidden sm:block text-xs sm:text-sm font-semibold text-brand-700 max-w-[10rem] leading-tight text-left">
+				{$WEBUI_NAME}
+			</span>
+		</div>
+	</header>
 
 	<div class="w-full absolute top-0 left-0 right-0 h-8 drag-region" />
 
 	{#if loaded}
 		<div
-			class="fixed bg-transparent min-h-screen w-full flex justify-center z-50 text-black dark:text-white"
+			class="fixed bg-transparent min-h-screen w-full flex justify-center z-50 text-black dark:text-white pt-20"
 			id="auth-container"
 		>
 			<div class="w-full px-10 min-h-screen flex flex-col text-center">
@@ -248,14 +271,20 @@
 					</div>
 				{:else}
 					<div class="my-auto flex flex-col justify-center items-center">
-						<div id="auth-login-card" class=" sm:max-w-md my-auto pb-10 w-full dark:text-gray-100">
+						<svg
+							class="w-full max-w-md h-10 mb-4 text-accent-500 opacity-80"
+							viewBox="0 0 400 40"
+							aria-hidden="true"
+						>
+							<path
+								fill="currentColor"
+								d="M0 24 C40 8, 80 40, 120 22 S200 4, 240 22 S320 40, 360 18 S400 8, 400 8 L400 40 L0 40 Z"
+							/>
+						</svg>
+						<div id="auth-login-card" class="card-brand sm:max-w-md my-auto pb-10 w-full dark:text-gray-100 bg-white/80 dark:bg-brand-900/60 px-6 pt-6">
 							{#if $config?.metadata?.auth_logo_position === 'center'}
 								<div class="flex justify-center mb-6">
-									<!-- LICENSE covers this Open WebUI sign-in logo.
-									Do not alter, remove, obscure, or replace it except as LICENSE permits:
-									https://docs.openwebui.com/license. -->
 									<img
-										id="logo"
 										crossorigin="anonymous"
 										src="{WEBUI_BASE_URL}/static/favicon.png"
 										class="size-24 rounded-full"
@@ -389,7 +418,7 @@
 									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
 										{#if mode === 'ldap'}
 											<button
-												class="bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-normal text-sm py-2.5 disabled:opacity-50 flex justify-center"
+												class="btn-brand w-full rounded-full font-normal text-sm py-2.5 flex justify-center"
 												type="submit"
 												disabled={submitting}
 											>
@@ -403,7 +432,7 @@
 											</button>
 										{:else}
 											<button
-												class="bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-normal text-sm py-2.5 disabled:opacity-50 flex justify-center"
+												class="btn-brand w-full rounded-full font-normal text-sm py-2.5 flex justify-center"
 												type="submit"
 												disabled={submitting}
 											>

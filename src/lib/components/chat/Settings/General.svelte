@@ -3,7 +3,7 @@
 	import { getLanguages, changeLanguage } from '$lib/i18n';
 	const dispatch = createEventDispatcher();
 
-	import { config, models, settings, theme, user } from '$lib/stores';
+	import { config, models, settings, theme, user, WEBUI_NAME } from '$lib/stores';
 	import { BRAND_COLORS } from '$lib/constants';
 
 	const i18n = getContext('i18n');
@@ -253,7 +253,7 @@
 						<!-- LICENSE covers this Open WebUI wordmark.
 						Do not alter, remove, obscure, or replace it except as LICENSE permits:
 						https://docs.openwebui.com/license. -->
-						Help us translate Open WebUI!
+						Help us translate {$WEBUI_NAME}!
 					</a>
 				</div>
 			{/if}

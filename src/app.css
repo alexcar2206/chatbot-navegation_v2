@@ -18,6 +18,14 @@
 	/* Brand palette (--brand-*) is defined in src/app.html so the splash can use it. */
 }
 
+.btn-brand {
+	@apply bg-brand-700 text-white hover:bg-brand-800 dark:bg-brand-600 dark:hover:bg-brand-500 transition disabled:opacity-50;
+}
+
+.card-brand {
+	@apply rounded-xl shadow-sm border border-brand-100 bg-white dark:border-brand-800 dark:bg-brand-950/40;
+}
+
 html {
 	word-break: break-word;
 	/* font-size scales the entire document via the same UI control */
@@ -751,6 +759,10 @@ html.high-contrast.dark .ProseMirror p.is-editor-empty:first-child::before {
 body {
 	background: #fff;
 	color: #000;
+}
+
+html.light body {
+	background: var(--brand-body-surface, #f4efe6);
 }
 
 .dark body {
