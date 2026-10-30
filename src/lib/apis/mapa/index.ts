@@ -2,6 +2,24 @@ import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 export type ZonaEstado = 'permitida' | 'restringida' | 'prohibida' | 'ponars';
 
+export type MapaUsoEmbalse = 'hidroelectrico' | 'abastecimiento' | 'riego';
+
+/** Normalized GeoJSON properties from `/mapa/geojson` (filter/sort helpers). */
+export type ZonaPropiedades = {
+	_nombre?: string | null;
+	_estado?: ZonaEstado | null;
+	_mvp?: string | null;
+	_rio?: string | null;
+	_municipio?: string | null;
+	_usos?: MapaUsoEmbalse[];
+	_superficie_ha?: number | null;
+	_volumen_hm3?: number | null;
+	_plazo_anios?: number | null;
+	/** [lat, lon] */
+	_centroide?: [number, number] | null;
+	[clave: string]: unknown;
+};
+
 export type MapaNavegacion = {
 	estado: ZonaEstado | null;
 	valor_origen: string | null;
@@ -10,8 +28,6 @@ export type MapaNavegacion = {
 	plazo: string | null;
 	plazo_anios: number | null;
 };
-
-export type MapaUsoEmbalse = 'hidroelectrico' | 'abastecimiento' | 'riego';
 
 export type MapaEmbalse = {
 	rio: string | null;

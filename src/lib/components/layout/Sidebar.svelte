@@ -905,7 +905,7 @@
 
 <MobileSwipePanel
 	open={$showSidebar}
-	enabled={$mobile}
+	enabled={$mobile && !$page.url.pathname.startsWith('/mapa')}
 	width={$sidebarWidth}
 	onOpenChange={(open) => showSidebar.set(open)}
 	let:visible

@@ -152,6 +152,7 @@
 					left: 50%;
 
 					width: 24rem;
+					max-width: 90vw;
 					transform: translateX(-50%);
 
 					display: flex;
@@ -169,16 +170,16 @@
 					class="animate-pulse-fast"
 				/>
 
-				<div style="position: relative; width: 24rem; margin-top: 0.5rem">
+				<div style="position: relative; width: min(16rem, 70vw); margin-top: 1.25rem">
 					<div
 						id="progress-background"
 						style="
 							position: absolute;
 							width: 100%;
-							height: 0.75rem;
+							height: 0.35rem;
 
 							border-radius: 9999px;
-							background-color: #fafafa9a;
+							background-color: rgba(11, 79, 108, 0.15);
 						"
 					></div>
 
@@ -186,19 +187,55 @@
 						id="progress-bar"
 						style="
 							position: absolute;
-							width: 0%;
-							height: 0.75rem;
+							width: 40%;
+							height: 0.35rem;
 							border-radius: 9999px;
-							background-color: #fff;
+							background: linear-gradient(90deg, #0b4f6c, #2bb3a3);
 						"
-						class="bg-white"
+						class="splash-progress-indeterminate"
 					></div>
 				</div>
 			</div>
 
-			<!-- <span style="position: absolute; bottom: 32px; left: 50%; margin: -36px 0 0 -36px">
-				Footer content
-			</span> -->
+			<svg
+				id="splash-wave"
+				aria-hidden="true"
+				viewBox="0 0 1440 120"
+				preserveAspectRatio="none"
+				style="position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 7rem; opacity: 0.55"
+			>
+				<path
+					fill="#2bb3a3"
+					d="M0,64 C240,120 480,0 720,48 C960,96 1200,16 1440,56 L1440,120 L0,120 Z"
+				>
+					<animate
+						attributeName="d"
+						dur="8s"
+						repeatCount="indefinite"
+						values="
+							M0,64 C240,120 480,0 720,48 C960,96 1200,16 1440,56 L1440,120 L0,120 Z;
+							M0,48 C240,0 480,96 720,64 C960,32 1200,100 1440,40 L1440,120 L0,120 Z;
+							M0,64 C240,120 480,0 720,48 C960,96 1200,16 1440,56 L1440,120 L0,120 Z
+						"
+					/>
+				</path>
+				<path
+					fill="#0b4f6c"
+					opacity="0.55"
+					d="M0,80 C320,20 560,110 800,70 C1040,30 1280,90 1440,60 L1440,120 L0,120 Z"
+				>
+					<animate
+						attributeName="d"
+						dur="11s"
+						repeatCount="indefinite"
+						values="
+							M0,80 C320,20 560,110 800,70 C1040,30 1280,90 1440,60 L1440,120 L0,120 Z;
+							M0,70 C320,100 560,30 800,80 C1040,110 1280,40 1440,75 L1440,120 L0,120 Z;
+							M0,80 C320,20 560,110 800,70 C1040,30 1280,90 1440,60 L1440,120 L0,120 Z
+						"
+					/>
+				</path>
+			</svg>
 		</div>
 	</body>
 
@@ -219,11 +256,11 @@
 		}
 
 		#splash-screen {
-			background: var(--brand-surface-light);
+			background: linear-gradient(180deg, #e8f1f5 0%, #f4efe6 55%, #e8f1f5 100%);
 		}
 
 		html.dark #splash-screen {
-			background: var(--brand-surface-dark);
+			background: linear-gradient(180deg, #021820 0%, #042a3a 55%, #021820 100%);
 		}
 
 		html.her #splash-screen {
@@ -235,11 +272,11 @@
 		}
 
 		#progress-background {
-			display: none;
+			display: block;
 		}
 
 		#progress-bar {
-			display: none;
+			display: block;
 		}
 
 		html.her #logo {
@@ -251,12 +288,20 @@
 			filter: invert(1);
 		}
 
+		html.her #splash-wave {
+			display: none;
+		}
+
 		html.her #progress-background {
 			display: block;
+			background-color: #fafafa9a !important;
 		}
 
 		html.her #progress-bar {
 			display: block;
+			background: #fff !important;
+			width: 0% !important;
+			animation: none !important;
 		}
 
 		@media (max-width: 24rem) {
@@ -277,6 +322,30 @@
 
 		.animate-pulse-fast {
 			animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+		}
+
+		@keyframes splash-progress {
+			0% {
+				transform: translateX(-120%);
+			}
+			100% {
+				transform: translateX(280%);
+			}
+		}
+
+		.splash-progress-indeterminate {
+			animation: splash-progress 1.4s ease-in-out infinite;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.animate-pulse-fast,
+			.splash-progress-indeterminate {
+				animation: none !important;
+			}
+
+			#splash-wave animate {
+				display: none;
+			}
 		}
 	</style>
 </html>

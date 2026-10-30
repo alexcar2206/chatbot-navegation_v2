@@ -583,43 +583,47 @@ def _es_vacio(valor: Any) -> bool:
 def _validar_campo(campo: dict, valor: Any) -> ErrorValidacion | None:
     """Validación genérica según ``tipo`` del esquema. ``valor`` ya normalizado."""
     etiqueta = campo['etiqueta']
+    clave = campo.get('clave') or ''
     tipo = campo.get('tipo')
     opciones = campo.get('opciones') or []
 
+    def err(codigo: str, **params: Any) -> ErrorValidacion:
+        return _error(codigo, campo=etiqueta, clave=clave, **params)
+
     if _es_vacio(valor):
-        return _error(E_OBLIGATORIO, campo=etiqueta) if campo.get('obligatorio') else None
+        return err(E_OBLIGATORIO) if campo.get('obligatorio') else None
 
     if tipo in ('texto', 'select'):
         if not isinstance(valor, str):
-            return _error(E_TIPO_TEXTO, campo=etiqueta)
+            return err(E_TIPO_TEXTO)
         if len(valor) > MAX_LONGITUD_TEXTO:
-            return _error(E_LONGITUD, campo=etiqueta, max=MAX_LONGITUD_TEXTO)
+            return err(E_LONGITUD, max=MAX_LONGITUD_TEXTO)
         if tipo == 'select' and opciones and valor not in opciones:
-            return _error(E_VALOR_NO_PERMITIDO, campo=etiqueta, valor=valor)
+            return err(E_VALOR_NO_PERMITIDO, valor=valor)
     elif tipo == 'multiselect':
         if not isinstance(valor, list) or not all(isinstance(item, str) for item in valor):
-            return _error(E_TIPO_LISTA, campo=etiqueta)
+            return err(E_TIPO_LISTA)
         invalidos = [item for item in valor if opciones and item not in opciones]
         if invalidos:
-            return _error(E_VALORES_NO_PERMITIDOS, campo=etiqueta, valores=', '.join(invalidos))
+            return err(E_VALORES_NO_PERMITIDOS, valores=', '.join(invalidos))
     elif tipo == 'fecha':
         if not isinstance(valor, date):
-            return _error(E_FECHA_INVALIDA, campo=etiqueta)
+            return err(E_FECHA_INVALIDA)
     elif tipo == 'numero':
         if isinstance(valor, bool):
-            return _error(E_NUMERO_INVALIDO, campo=etiqueta)
+            return err(E_NUMERO_INVALIDO)
         try:
             numero = int(valor)
         except (TypeError, ValueError):
-            return _error(E_NUMERO_INVALIDO, campo=etiqueta)
+            return err(E_NUMERO_INVALIDO)
         if isinstance(valor, float) and not valor.is_integer():
-            return _error(E_NUMERO_INVALIDO, campo=etiqueta)
+            return err(E_NUMERO_INVALIDO)
         minimo, maximo = campo.get('minimo'), campo.get('maximo')
         if (minimo is not None and numero < minimo) or (maximo is not None and numero > maximo):
-            return _error(E_NUMERO_RANGO, campo=etiqueta, min=minimo, max=maximo)
+            return err(E_NUMERO_RANGO, min=minimo, max=maximo)
     elif tipo == 'checkbox':
         if not isinstance(valor, bool):
-            return _error(E_CHECKBOX, campo=etiqueta)
+            return err(E_CHECKBOX)
     return None
 
 

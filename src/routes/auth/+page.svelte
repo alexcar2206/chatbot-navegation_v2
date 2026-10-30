@@ -152,8 +152,21 @@
 	};
 
 	let onboarding = false;
+	let mediaFondo = false;
+	let usarVideo = false;
+	let reducirMovimiento = false;
+	let ahorroDatos = false;
+
+	const comprobarMediaAuth = () => {
+		if (typeof window === 'undefined') return;
+		reducirMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		ahorroDatos = Boolean((navigator as any).connection?.saveData);
+		const lg = window.matchMedia('(min-width: 1024px)').matches;
+		usarVideo = lg && !reducirMovimiento && !ahorroDatos;
+	};
 
 	onMount(async () => {
+		comprobarMediaAuth();
 		const redirectPath = $page.url.searchParams.get('redirect');
 		const logout = $page.url.searchParams.get('state') === 'logout';
 
@@ -221,12 +234,51 @@
 	}}
 />
 
-<div class="w-full h-screen max-h-[100dvh] text-white relative" id="auth-page">
-	<div class="w-full h-full absolute top-0 left-0 bg-[var(--brand-body-surface,#f4efe6)] dark:bg-brand-900"></div>
+<div class="w-full h-screen max-h-[100dvh] text-white relative overflow-hidden" id="auth-page">
+	<!-- Full-page background: video / poster / solid fallback -->
+	{#if mediaFondo && usarVideo}
+		<video
+			class="absolute inset-0 z-0 h-full w-full object-cover"
+			autoplay
+			muted
+			loop
+			playsinline
+			poster="{WEBUI_BASE_URL}/static/auth/fondo.webp"
+			on:error={() => (mediaFondo = false)}
+		>
+			<source src="{WEBUI_BASE_URL}/static/auth/fondo.webm" type="video/webm" />
+			<source src="{WEBUI_BASE_URL}/static/auth/fondo.mp4" type="video/mp4" />
+		</video>
+	{:else if mediaFondo}
+		<img
+			src="{WEBUI_BASE_URL}/static/auth/fondo.webp"
+			alt=""
+			class="absolute inset-0 z-0 h-full w-full object-cover"
+			on:error={() => (mediaFondo = false)}
+		/>
+	{:else}
+		<div
+			class="absolute inset-0 z-0 bg-[var(--brand-body-surface,#f4efe6)] dark:bg-brand-900"
+		></div>
+	{/if}
+	{#if mediaFondo}
+		<div
+			class="absolute inset-0 z-[1] bg-gradient-to-br from-brand-950/55 via-brand-900/40 to-brand-800/50"
+			aria-hidden="true"
+		></div>
+	{/if}
+	<!-- Probe optional media once; hide on error keeps the solid fallback. -->
+	<img
+		src="{WEBUI_BASE_URL}/static/auth/fondo.webp"
+		alt=""
+		class="hidden"
+		on:load={() => (mediaFondo = true)}
+		on:error={() => (mediaFondo = false)}
+	/>
 
 	<!-- Institutional header (AGE / MITECO) -->
 	<header
-		class="fixed top-0 inset-x-0 z-[60] bg-white border-b border-gray-200 px-4 sm:px-8 py-3 flex items-center justify-between gap-4"
+		class="fixed top-0 inset-x-0 z-[60] bg-white/95 backdrop-blur border-b border-gray-200 px-4 sm:px-8 py-3 flex items-center justify-between gap-4"
 	>
 		<img
 			src="{WEBUI_BASE_URL}/static/institucional/cabecera-ministerio.svg"
@@ -251,12 +303,12 @@
 
 	{#if loaded}
 		<div
-			class="fixed bg-transparent min-h-screen w-full flex justify-center z-50 text-black dark:text-white pt-20"
+			class="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-transparent text-black dark:text-white pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
 			id="auth-container"
 		>
-			<div class="w-full px-10 min-h-screen flex flex-col text-center">
+			<div class="w-full px-4 sm:px-8 lg:px-10 min-h-[calc(100dvh-5rem)] flex flex-col">
 				{#if ($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false}
-					<div class=" my-auto pb-10 w-full sm:max-w-md">
+					<div class=" my-auto pb-10 w-full sm:max-w-md mx-auto text-center">
 						<div
 							class="flex items-center justify-center gap-3 text-xl sm:text-2xl text-center font-normal dark:text-gray-200"
 						>
@@ -270,18 +322,55 @@
 						</div>
 					</div>
 				{:else}
-					<div class="my-auto flex flex-col justify-center items-center">
-						<svg
-							class="w-full max-w-md h-10 mb-4 text-accent-500 opacity-80"
-							viewBox="0 0 400 40"
-							aria-hidden="true"
+					<div
+						class="my-auto w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-stretch py-6"
+					>
+						<section
+							class="relative overflow-hidden rounded-2xl bg-white/10 dark:bg-brand-950/30 backdrop-blur-md border border-white/20 text-white p-6 sm:p-8 flex flex-col justify-center self-center shadow-lg"
 						>
-							<path
-								fill="currentColor"
-								d="M0 24 C40 8, 80 40, 120 22 S200 4, 240 22 S320 40, 360 18 S400 8, 400 8 L400 40 L0 40 Z"
-							/>
-						</svg>
-						<div id="auth-login-card" class="card-brand sm:max-w-md my-auto pb-10 w-full dark:text-gray-100 bg-white/80 dark:bg-brand-900/60 px-6 pt-6">
+							<svg
+								class="absolute inset-x-0 bottom-0 w-full h-28 opacity-30 pointer-events-none"
+								viewBox="0 0 400 80"
+								aria-hidden="true"
+							>
+								<path
+									fill="currentColor"
+									d="M0 48 C60 16, 120 72, 180 40 S300 8, 360 36 S400 20, 400 20 L400 80 L0 80 Z"
+								/>
+							</svg>
+							<div class="relative z-10 space-y-3">
+								<p class="text-xs uppercase tracking-wider text-white/80">
+									{$i18n.t('Miño-Sil basin')}
+								</p>
+								<h2 class="text-2xl sm:text-3xl font-semibold tracking-tight drop-shadow">
+									{$WEBUI_NAME}
+								</h2>
+								<p class="text-sm text-white/90 max-w-md drop-shadow-sm">
+									{$i18n.t(
+										'Consult regulations, explore Annex 3 navigation zones, and generate your responsible declaration.'
+									)}
+								</p>
+								<ul class="grid gap-2 text-sm text-white/95 pt-2">
+									<li class="flex items-start gap-2">
+										<span class="mt-1 size-1.5 rounded-full bg-accent-300 shrink-0" />
+										{$i18n.t('Consult regulations')}
+									</li>
+									<li class="flex items-start gap-2">
+										<span class="mt-1 size-1.5 rounded-full bg-accent-300 shrink-0" />
+										{$i18n.t('View zone map')}
+									</li>
+									<li class="flex items-start gap-2">
+										<span class="mt-1 size-1.5 rounded-full bg-accent-300 shrink-0" />
+										{$i18n.t('Responsible declaration')}
+									</li>
+								</ul>
+							</div>
+						</section>
+
+						<div
+							id="auth-login-card"
+							class="card-brand w-full dark:text-gray-100 bg-white/95 dark:bg-brand-950/85 backdrop-blur-sm px-6 pt-6 pb-8 self-center shadow-xl"
+						>
 							{#if $config?.metadata?.auth_logo_position === 'center'}
 								<div class="flex justify-center mb-6">
 									<img
@@ -293,14 +382,14 @@
 								</div>
 							{/if}
 							<form
-								class=" flex flex-col justify-center"
+								class=" flex flex-col justify-center text-left"
 								on:submit={(e) => {
 									e.preventDefault();
 									submitHandler();
 								}}
 							>
-								<div class="mb-1">
-									<div class=" text-2xl font-normal">
+								<div class="mb-1 text-center sm:text-left">
+									<div class="text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">
 										{#if $config?.onboarding ?? false}
 											{$i18n.t(`Get started with {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 										{:else if mode === 'ldap'}
@@ -322,18 +411,41 @@
 									{/if}
 								</div>
 
+								{#if $config?.features.enable_signup && !($config?.onboarding ?? false) && mode !== 'ldap'}
+									<div class="mt-4 flex rounded-xl border border-brand-100 dark:border-brand-800 p-1 bg-brand-50/50 dark:bg-brand-950/40" role="tablist">
+										<button
+											type="button"
+											class="flex-1 rounded-lg py-2 text-sm font-medium transition {mode === 'signin'
+												? 'bg-white dark:bg-brand-900 shadow text-brand-800 dark:text-brand-100'
+												: 'text-gray-500'}"
+											on:click={() => (mode = 'signin')}
+										>
+											{$i18n.t('Sign in')}
+										</button>
+										<button
+											type="button"
+											class="flex-1 rounded-lg py-2 text-sm font-medium transition {mode === 'signup'
+												? 'bg-white dark:bg-brand-900 shadow text-brand-800 dark:text-brand-100'
+												: 'text-gray-500'}"
+											on:click={() => (mode = 'signup')}
+										>
+											{$i18n.t('Sign up')}
+										</button>
+									</div>
+								{/if}
+
 								{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
-									<div class="flex flex-col mt-4">
+									<div class="flex flex-col mt-4 gap-3">
 										{#if mode === 'signup'}
-											<div class="mb-2">
-												<label for="name" class="text-sm font-normal text-left mb-1 block"
+											<div>
+												<label for="name" class="text-sm font-medium text-left mb-1 block"
 													>{$i18n.t('Name')}</label
 												>
 												<input
 													bind:value={name}
 													type="text"
 													id="name"
-													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
+													class="input-brand"
 													autocomplete="name"
 													placeholder={$i18n.t('Enter Your Full Name')}
 													required
@@ -342,14 +454,14 @@
 										{/if}
 
 										{#if mode === 'ldap'}
-											<div class="mb-2">
-												<label for="username" class="text-sm font-normal text-left mb-1 block"
+											<div>
+												<label for="username" class="text-sm font-medium text-left mb-1 block"
 													>{$i18n.t('Username')}</label
 												>
 												<input
 													bind:value={ldapUsername}
 													type="text"
-													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
+													class="input-brand"
 													autocomplete="username"
 													name="username"
 													id="username"
@@ -358,15 +470,15 @@
 												/>
 											</div>
 										{:else}
-											<div class="mb-2">
-												<label for="email" class="text-sm font-normal text-left mb-1 block"
+											<div>
+												<label for="email" class="text-sm font-medium text-left mb-1 block"
 													>{$i18n.t('Email')}</label
 												>
 												<input
 													bind:value={email}
 													type="email"
 													id="email"
-													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
+													class="input-brand"
 													autocomplete="email"
 													name="email"
 													placeholder={$i18n.t('Enter Your Email')}
@@ -376,14 +488,14 @@
 										{/if}
 
 										<div>
-											<label for="password" class="text-sm font-normal text-left mb-1 block"
+											<label for="password" class="text-sm font-medium text-left mb-1 block"
 												>{$i18n.t('Password')}</label
 											>
 											<SensitiveInput
 												bind:value={password}
 												type="password"
 												id="password"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
+												class="input-brand"
 												placeholder={$i18n.t('Enter Your Password')}
 												autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
 												name="password"
@@ -394,17 +506,17 @@
 										</div>
 
 										{#if mode === 'signup' && $config?.features?.enable_signup_password_confirmation}
-											<div class="mt-2">
+											<div>
 												<label
 													for="confirm-password"
-													class="text-sm font-normal text-left mb-1 block"
+													class="text-sm font-medium text-left mb-1 block"
 													>{$i18n.t('Confirm Password')}</label
 												>
 												<SensitiveInput
 													bind:value={confirmPassword}
 													type="password"
 													id="confirm-password"
-													class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+													class="input-brand"
 													placeholder={$i18n.t('Confirm Your Password')}
 													autocomplete="new-password"
 													name="confirm-password"
@@ -418,7 +530,7 @@
 									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
 										{#if mode === 'ldap'}
 											<button
-												class="btn-brand w-full rounded-full font-normal text-sm py-2.5 flex justify-center"
+												class="btn-brand w-full !rounded-full"
 												type="submit"
 												disabled={submitting}
 											>
@@ -432,7 +544,7 @@
 											</button>
 										{:else}
 											<button
-												class="btn-brand w-full rounded-full font-normal text-sm py-2.5 flex justify-center"
+												class="btn-brand w-full !rounded-full"
 												type="submit"
 												disabled={submitting}
 											>
@@ -450,28 +562,6 @@
 													</div>
 												{/if}
 											</button>
-
-											{#if $config?.features.enable_signup && !($config?.onboarding ?? false)}
-												<div class=" mt-4 text-sm text-center">
-													{mode === 'signin'
-														? $i18n.t("Don't have an account?")
-														: $i18n.t('Already have an account?')}
-
-													<button
-														class=" font-normal underline"
-														type="button"
-														on:click={() => {
-															if (mode === 'signin') {
-																mode = 'signup';
-															} else {
-																mode = 'signin';
-															}
-														}}
-													>
-														{mode === 'signin' ? $i18n.t('Sign up') : $i18n.t('Sign in')}
-													</button>
-												</div>
-											{/if}
 										{/if}
 									{/if}
 								</div>
@@ -634,14 +724,12 @@
 									</button>
 								</div>
 							{/if}
-						</div>
-						{#if $config?.metadata?.login_footer}
-							<div class="max-w-3xl mx-auto">
-								<div class="mt-2 text-[0.7rem] text-gray-500 dark:text-gray-400 marked">
+							{#if $config?.metadata?.login_footer}
+								<div class="mt-3 text-[0.7rem] text-gray-500 dark:text-gray-400 marked text-center">
 									{@html DOMPurify.sanitize(marked($config?.metadata?.login_footer))}
 								</div>
-							</div>
-						{/if}
+							{/if}
+						</div>
 					</div>
 				{/if}
 			</div>

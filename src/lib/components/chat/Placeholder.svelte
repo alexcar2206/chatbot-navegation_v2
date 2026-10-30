@@ -211,31 +211,43 @@
 
 				{#if showHomeQuickActions}
 					<div
-						class="flex flex-wrap justify-center gap-2 mt-3 mb-1 max-w-xl px-2"
+						class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 mb-2 w-full max-w-3xl px-3"
 						in:fade={{ duration: 100, delay: 80 }}
 					>
 						<button
 							type="button"
-							class="card-brand px-3 py-2.5 text-left text-sm hover:border-brand-300 dark:hover:border-brand-600 transition flex-1 min-w-[9rem] max-w-[11rem]"
+							class="card-brand group px-4 py-4 text-left hover:border-brand-300 dark:hover:border-brand-600 hover:shadow-md transition"
 							on:click={onConsultarNormativa}
 						>
-							<span class="block font-medium text-brand-800 dark:text-brand-100">
+							<span
+								class="mb-2 flex size-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-200"
+								aria-hidden="true"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" class="size-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+							</span>
+							<span class="block font-semibold tracking-tight text-brand-900 dark:text-brand-50">
 								{$i18n.t('Consult regulations')}
 							</span>
-							<span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+							<span class="block text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
 								{$i18n.t('Miño-Sil norms and navigation rules')}
 							</span>
 						</button>
 						{#if featureNavegacionDisponible($config, $user, 'mapa')}
 							<button
 								type="button"
-								class="card-brand px-3 py-2.5 text-left text-sm hover:border-brand-300 dark:hover:border-brand-600 transition flex-1 min-w-[9rem] max-w-[11rem]"
+								class="card-brand group px-4 py-4 text-left hover:border-brand-300 dark:hover:border-brand-600 hover:shadow-md transition"
 								on:click={() => goto('/mapa')}
 							>
-								<span class="block font-medium text-brand-800 dark:text-brand-100">
+								<span
+									class="mb-2 flex size-9 items-center justify-center rounded-xl bg-accent-50 text-accent-700 dark:bg-accent-950/50 dark:text-accent-200"
+									aria-hidden="true"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" class="size-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" /></svg>
+								</span>
+								<span class="block font-semibold tracking-tight text-brand-900 dark:text-brand-50">
 									{$i18n.t('View zone map')}
 								</span>
-								<span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+								<span class="block text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
 									{$i18n.t('Annex 3 navigation zones')}
 								</span>
 							</button>
@@ -243,13 +255,19 @@
 						{#if featureNavegacionDisponible($config, $user, 'declaracion')}
 							<button
 								type="button"
-								class="card-brand px-3 py-2.5 text-left text-sm hover:border-brand-300 dark:hover:border-brand-600 transition flex-1 min-w-[9rem] max-w-[11rem]"
+								class="card-brand group px-4 py-4 text-left hover:border-brand-300 dark:hover:border-brand-600 hover:shadow-md transition"
 								on:click={() => goto('/declaracion')}
 							>
-								<span class="block font-medium text-brand-800 dark:text-brand-100">
+								<span
+									class="mb-2 flex size-9 items-center justify-center rounded-xl bg-warm-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-200 border border-brand-100/60 dark:border-brand-800"
+									aria-hidden="true"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" class="size-5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+								</span>
+								<span class="block font-semibold tracking-tight text-brand-900 dark:text-brand-50">
 									{$i18n.t('Responsible declaration')}
 								</span>
-								<span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+								<span class="block text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
 									{$i18n.t('Generate official DOCX')}
 								</span>
 							</button>

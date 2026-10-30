@@ -534,15 +534,54 @@ def preparar_zonas(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return zonas
 
 
+def _props_filtro_mapa(fila: gpd.GeoSeries, geom) -> dict:
+    """Propiedades normalizadas para filtrar/ordenar en el cliente."""
+    if '_nombre' in fila.index:
+        nombre = fila['_nombre'] or None
+    else:
+        nombre = _nombre_desde_fila(fila)
+    embalse = _embalse_desde_fila(fila)
+    navegacion = _navegacion_desde_fila(fila)
+    centroide = None
+    try:
+        if geom is not None and not geom.is_empty:
+            c = geom.centroid
+            centroide = [float(c.y), float(c.x)]
+    except Exception:
+        centroide = None
+    return {
+        '_mvp': embalse_en_lista_mvp(nombre),
+        '_rio': embalse.get('rio'),
+        '_municipio': embalse.get('municipio'),
+        '_usos': embalse.get('usos') or [],
+        '_superficie_ha': embalse.get('superficie_ha'),
+        '_volumen_hm3': embalse.get('volumen_hm3'),
+        '_plazo_anios': navegacion.get('plazo_anios'),
+        '_centroide': centroide,
+    }
+
+
 def geojson_para_mapa(gdf: gpd.GeoDataFrame, tolerancia_m: float = 25.0) -> dict:
-    gdf = preparar_zonas(gdf).drop(columns=['_area_m2'])
+    preparado = preparar_zonas(gdf)
+    gdf = preparado.drop(columns=['_area_m2'], errors='ignore')
     if gdf.empty:
         return json.loads(gdf.to_json())
 
     gdf_proj = gdf.to_crs(epsg=CRS_METRICO).copy()
     gdf_proj['geometry'] = gdf_proj.geometry.simplify(tolerance=tolerancia_m, preserve_topology=True)
     gdf_display = gdf_proj.to_crs(epsg=4326)
-    return json.loads(gdf_display.to_json())
+    data = json.loads(gdf_display.to_json())
+
+    features = data.get('features') or []
+    for i, (idx, fila) in enumerate(preparado.iterrows()):
+        if i >= len(features):
+            break
+        props = features[i].setdefault('properties', {}) or {}
+        features[i]['properties'] = {
+            **props,
+            **_props_filtro_mapa(fila, gdf_display.loc[idx].geometry),
+        }
+    return data
 
 
 def nombre_feature_geojson(props: dict | None) -> str:

@@ -11,6 +11,7 @@ from open_webui.navegacion.geozona import (
     cargar_zonas,
     clasificar_navegacion,
     consultar_punto,
+    geojson_para_mapa,
     preparar_zonas,
     resumen_estados,
 )
@@ -162,3 +163,19 @@ def test_resultado_vacio_sin_ficha(zonas):
     assert res['navegacion'] is None
     assert res['embalse'] is None
     assert 'atributos' not in res
+
+
+def test_geojson_para_mapa_incluye_props_filtro(zonas):
+    data = geojson_para_mapa(zonas)
+    features = data['features']
+    assert features
+    alb = next(f for f in features if f['properties'].get('_nombre') == 'ALBARELLOS')
+    props = alb['properties']
+    assert props['_estado'] == 'permitida'
+    assert props['_rio'] == 'AVIA'
+    assert props['_usos'] == ['hidroelectrico']
+    assert props['_superficie_ha'] == 314.02
+    assert props['_volumen_hm3'] == 90.73
+    assert props['_plazo_anios'] == 6
+    assert isinstance(props['_centroide'], list) and len(props['_centroide']) == 2
+    assert '_mvp' in props

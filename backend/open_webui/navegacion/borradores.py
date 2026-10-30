@@ -2,6 +2,9 @@
 
 Un borrador puede estar incompleto o tener valores aún no válidos para generar el
 documento; aquí solo se limita su forma (claves del esquema, tipos simples y tamaño).
+
+Las claves que ya no existen en el esquema se descartan al guardar (evolución del
+formulario) en lugar de rechazar el borrador entero.
 """
 
 from __future__ import annotations
@@ -21,7 +24,6 @@ MAX_ELEMENTOS_LISTA = 200
 E_NOMBRE_VACIO = 'NOMBRE_VACIO'
 E_NOMBRE_LARGO = 'NOMBRE_LARGO'
 E_PASO_RANGO = 'PASO_RANGO'
-E_CLAVES_DESCONOCIDAS = 'CLAVES_DESCONOCIDAS'
 E_VALOR_INVALIDO = 'VALOR_INVALIDO'
 E_DEMASIADO_GRANDE = 'DEMASIADO_GRANDE'
 
@@ -42,8 +44,19 @@ def _valor_valido(valor: Any) -> bool:
     return _valor_simple_valido(valor)
 
 
+def sanitizar_datos(datos: dict) -> dict:
+    """Devuelve solo las claves que existen en el esquema del formulario."""
+    if not isinstance(datos, dict):
+        return {}
+    return {k: v for k, v in datos.items() if k in CLAVES_PERMITIDAS}
+
+
 def errores_borrador(nombre: str, paso: int, datos: dict) -> list[dict[str, Any]]:
-    """Lista de errores ``{codigo, mensaje, ...}``; vacía si el borrador se puede guardar."""
+    """Lista de errores ``{codigo, mensaje, ...}``; vacía si el borrador se puede guardar.
+
+    ``datos`` debe estar ya sanitizado (solo claves del esquema). Preferir
+    ``preparar_borrador`` desde la API.
+    """
     errores: list[dict[str, Any]] = []
 
     nombre_limpio = (nombre or '').strip()
@@ -64,17 +77,7 @@ def errores_borrador(nombre: str, paso: int, datos: dict) -> list[dict[str, Any]
         errores.append({'codigo': E_VALOR_INVALIDO, 'mensaje': 'Los datos deben ser un objeto.', 'claves': []})
         return errores
 
-    desconocidas = sorted(k for k in datos if k not in CLAVES_PERMITIDAS)
-    if desconocidas:
-        errores.append(
-            {
-                'codigo': E_CLAVES_DESCONOCIDAS,
-                'mensaje': 'El borrador contiene campos que no existen en el formulario.',
-                'claves': desconocidas,
-            }
-        )
-
-    invalidas = sorted(k for k, v in datos.items() if k in CLAVES_PERMITIDAS and not _valor_valido(v))
+    invalidas = sorted(k for k, v in datos.items() if not _valor_valido(v))
     if invalidas:
         errores.append(
             {
@@ -93,3 +96,13 @@ def errores_borrador(nombre: str, paso: int, datos: dict) -> list[dict[str, Any]
         )
 
     return errores
+
+
+def preparar_borrador(
+    nombre: str, paso: int, datos: Any
+) -> tuple[list[dict[str, Any]], dict]:
+    """Filtra claves desconocidas y valida. Devuelve ``(errores, datos_limpios)``."""
+    if not isinstance(datos, dict):
+        return errores_borrador(nombre, paso, datos), {}
+    limpios = sanitizar_datos(datos)
+    return errores_borrador(nombre, paso, limpios), limpios

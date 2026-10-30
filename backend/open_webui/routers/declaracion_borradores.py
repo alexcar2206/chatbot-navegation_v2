@@ -22,7 +22,7 @@ from open_webui.models.declaracion_borradores import (
     DeclaracionBorradorResumen,
     IdEnUso,
 )
-from open_webui.navegacion.borradores import errores_borrador
+from open_webui.navegacion.borradores import preparar_borrador
 from open_webui.navegacion.deps import require_feature
 
 log = logging.getLogger(__name__)
@@ -60,10 +60,10 @@ class BorradorCreadoResponse(DeclaracionBorradorModel):
 
 
 def _validar(nombre: str, paso: int, datos: dict) -> DeclaracionBorradorForm:
-    errores = errores_borrador(nombre, paso, datos)
+    errores, limpios = preparar_borrador(nombre, paso, datos)
     if errores:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={'errores': errores})
-    return DeclaracionBorradorForm(nombre=nombre.strip(), paso=paso, datos=datos)
+    return DeclaracionBorradorForm(nombre=nombre.strip(), paso=paso, datos=limpios)
 
 
 async def purgar_borradores_caducados() -> int:
