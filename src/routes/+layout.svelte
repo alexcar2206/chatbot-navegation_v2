@@ -54,6 +54,7 @@
 	import { getSessionUser, updateUserTimezone, userSignOut } from '$lib/apis/auths';
 	import { getAllTags } from '$lib/apis/chats';
 	import { chatCompletion } from '$lib/apis/openai';
+	import { borradoresRepo } from '$lib/components/declaracion/borradores';
 	import { isTemporaryChatId } from '$lib/utils/chatId';
 	import {
 		addOpenAIConnection,
@@ -920,6 +921,7 @@
 			clearInterval(tokenTimer);
 			tokenTimer = null;
 		}
+		borradoresRepo.limpiarCache($user?.id ?? '');
 		user.set(null);
 		localStorage.removeItem('token');
 		// Clear the OAuth token cookie so /auth doesn't auto-login and redirect-loop

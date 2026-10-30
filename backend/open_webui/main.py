@@ -164,6 +164,7 @@ from open_webui.routers import (
     notes,
     mapa,
     declaracion,
+    declaracion_borradores,
     notifications,
     ollama,
     openai,
@@ -485,6 +486,11 @@ async def lifespan(app: FastAPI):
             log.warning('DR plantilla: %s', dr_result.get('message'))
     except Exception as e:
         log.warning('DR plantilla regeneration skipped/failed: %s', e)
+
+    try:
+        await declaracion_borradores.purgar_borradores_caducados()
+    except Exception as e:
+        log.warning('Declaration drafts purge skipped/failed: %s', e)
 
     app.state.startup_complete = True
     await publish_event(app, EVENTS.SYSTEM_STARTUP_COMPLETED, source='system')
@@ -868,6 +874,9 @@ app.include_router(chats.router, prefix='/api/v1/chats', tags=['chats'])
 app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 app.include_router(mapa.router, prefix='/api/v1/mapa', tags=['mapa'])
 app.include_router(declaracion.router, prefix='/api/v1/declaracion', tags=['declaracion'])
+app.include_router(
+    declaracion_borradores.router, prefix='/api/v1/declaracion/borradores', tags=['declaracion']
+)
 
 
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])

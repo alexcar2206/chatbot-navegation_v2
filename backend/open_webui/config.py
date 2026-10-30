@@ -2088,6 +2088,17 @@ ENABLE_MAPA = os.getenv('ENABLE_MAPA', 'True').lower() == 'true'
 
 ENABLE_DECLARACION = os.getenv('ENABLE_DECLARACION', 'True').lower() == 'true'
 
+# Borradores de declaración en servidor: días sin cambios antes de borrarlos (0 = nunca) y máximo por usuario.
+try:
+    DECLARACION_BORRADORES_TTL_DIAS = max(0, int(os.getenv('DECLARACION_BORRADORES_TTL_DIAS', '90')))
+except ValueError:
+    DECLARACION_BORRADORES_TTL_DIAS = 90
+
+try:
+    DECLARACION_BORRADORES_MAX = max(1, int(os.getenv('DECLARACION_BORRADORES_MAX', '50')))
+except ValueError:
+    DECLARACION_BORRADORES_MAX = 50
+
 ENABLE_USER_STATUS = os.getenv('ENABLE_USER_STATUS', 'True').lower() == 'true'
 
 ENABLE_EVALUATION_ARENA_MODELS = os.getenv('ENABLE_EVALUATION_ARENA_MODELS', 'False').lower() == 'true'

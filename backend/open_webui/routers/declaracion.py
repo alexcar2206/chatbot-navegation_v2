@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from open_webui.config import DECLARACION_BORRADORES_TTL_DIAS
 from open_webui.navegacion.deps import require_feature
 from open_webui.navegacion.formulario_dr import (
     LIMITACIONES_MVP,
@@ -74,6 +75,7 @@ def declaracion_status(user=Depends(require_declaracion)):
         'total_pasos': TOTAL_PASOS,
         'total_pasos_datos': TOTAL_PASOS_DATOS,
         'paso_revision': NUM_PASO_REVISION,
+        'borradores_ttl_dias': DECLARACION_BORRADORES_TTL_DIAS,
     }
     if user.role == 'admin':
         respuesta['plantilla_path'] = str(ruta_plantilla())

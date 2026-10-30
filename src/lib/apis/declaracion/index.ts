@@ -9,6 +9,8 @@ export type DeclaracionStatus = {
 	total_pasos: number;
 	total_pasos_datos: number;
 	paso_revision: number;
+	/** Days without changes before a server draft is deleted (0 = never). */
+	borradores_ttl_dias?: number;
 };
 
 export type MostrarSi =
@@ -167,3 +169,116 @@ export const generarDeclaracion = async (
 		'Declaracion_responsable.docx';
 	return { blob, filename };
 };
+
+// --- Borradores en servidor ---------------------------------------------------
+
+export type BorradorResumen = {
+	id: string;
+	nombre: string;
+	paso: number;
+	version: number;
+	/** Epoch in nanoseconds. */
+	created_at: number;
+	updated_at: number;
+};
+
+export type BorradorServidor = BorradorResumen & {
+	user_id: string;
+	datos: Record<string, unknown>;
+};
+
+export type BorradorPayload = {
+	nombre: string;
+	paso: number;
+	datos: Record<string, unknown>;
+};
+
+/** The request never reached the server (offline, DNS, CORS…): keep it queued and retry. */
+export class ErrorRed extends Error {}
+
+/** 409 on update: someone else saved first. `actual` is the server copy. */
+export class ConflictoBorrador extends Error {
+	actual: BorradorServidor;
+
+	constructor(actual: BorradorServidor, mensaje?: string) {
+		super(mensaje || 'Draft conflict');
+		this.actual = actual;
+	}
+}
+
+/** Any other rejection (validation, limit, not found…). Retrying will not help. */
+export class ErrorBorrador extends Error {
+	status: number;
+	codigo: string | null;
+
+	constructor(status: number, codigo: string | null, mensaje: string) {
+		super(mensaje);
+		this.status = status;
+		this.codigo = codigo;
+	}
+}
+
+const BORRADORES_URL = `${WEBUI_API_BASE_URL}/declaracion/borradores`;
+
+const peticionBorrador = async <T>(
+	token: string,
+	path: string,
+	init: RequestInit = {}
+): Promise<T> => {
+	let res: Response;
+	try {
+		res = await fetch(`${BORRADORES_URL}${path}`, { ...init, headers: authHeaders(token) });
+	} catch (e: any) {
+		throw new ErrorRed(String(e?.message || e));
+	}
+	if (res.ok) return res.json();
+
+	let detail: any = null;
+	try {
+		detail = (await res.json())?.detail;
+	} catch {
+		/* empty */
+	}
+	if (res.status === 409 && detail?.codigo === 'CONFLICTO_VERSION' && detail?.actual) {
+		throw new ConflictoBorrador(detail.actual, detail.mensaje);
+	}
+	if (res.status >= 500 || res.status === 0) {
+		throw new ErrorRed(`HTTP ${res.status}`);
+	}
+	const mensaje =
+		(typeof detail === 'string' && detail) ||
+		detail?.mensaje ||
+		(Array.isArray(detail?.errores) && detail.errores.map((e: any) => e.mensaje).join('\n')) ||
+		res.statusText;
+	const codigo =
+		detail?.codigo ?? (Array.isArray(detail?.errores) ? detail.errores[0]?.codigo : null);
+	throw new ErrorBorrador(res.status, codigo ?? null, mensaje);
+};
+
+export const listarBorradores = (token: string) =>
+	peticionBorrador<BorradorResumen[]>(token, '/', { method: 'GET' });
+
+export const obtenerBorrador = (token: string, id: string) =>
+	peticionBorrador<BorradorServidor>(token, `/${encodeURIComponent(id)}`, { method: 'GET' });
+
+export const crearBorrador = (token: string, id: string, payload: BorradorPayload) =>
+	peticionBorrador<BorradorServidor & { existente: boolean }>(token, '/', {
+		method: 'POST',
+		body: JSON.stringify({ id, ...payload })
+	});
+
+export const actualizarBorrador = (
+	token: string,
+	id: string,
+	payload: BorradorPayload,
+	version: number
+) =>
+	peticionBorrador<BorradorServidor>(token, `/${encodeURIComponent(id)}`, {
+		method: 'PUT',
+		body: JSON.stringify({ ...payload, version })
+	});
+
+export const eliminarBorradorServidor = (token: string, id: string) =>
+	peticionBorrador<{ eliminado: boolean }>(token, `/${encodeURIComponent(id)}`, {
+		method: 'DELETE'
+	});

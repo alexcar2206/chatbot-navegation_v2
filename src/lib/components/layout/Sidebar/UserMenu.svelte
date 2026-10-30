@@ -9,6 +9,7 @@
 
 	import { showSettings, mobile, showSidebar, user, config, settings } from '$lib/stores';
 	import { featureNavegacionDisponible } from '$lib/utils/navegacion';
+	import { borradoresRepo } from '$lib/components/declaracion/borradores';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
@@ -520,6 +521,7 @@
 				type="button"
 				on:click={async () => {
 					const res = await userSignOut();
+					borradoresRepo.limpiarCache($user?.id ?? '');
 					localStorage.removeItem('token');
 
 					location.href = getLogoutRedirectUrl(res?.redirect_url);

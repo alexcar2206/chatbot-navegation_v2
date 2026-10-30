@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
+	import { getContext, onDestroy, onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
@@ -17,8 +18,11 @@
 	import PasoForm from './PasoForm.svelte';
 	import RevisionPanel from './RevisionPanel.svelte';
 	import BorradoresPanel from './BorradoresPanel.svelte';
-	import type { BorradorEntrada } from './borradores';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import { borradorActivoId, borradoresRepo, type BorradorEntrada } from './borradores';
 	import { traducirError } from './i18n';
+
+	const AUTOGUARDADO_MS = 2000;
 
 	const i18n = getContext('i18n');
 	$: _lang = $i18n.language;
@@ -35,6 +39,43 @@
 	let matriculaFinal = '';
 	let busy = false;
 	let generating = false;
+	let ttlBorradores = 90;
+	let preguntarBorrarBorrador = false;
+
+	let autoguardadoPendiente: ReturnType<typeof setTimeout> | null = null;
+	let ultimoGuardado = '';
+
+	const instantanea = () => JSON.stringify({ paso, datos });
+
+	const autoguardar = async () => {
+		autoguardadoPendiente = null;
+		const id = get(borradorActivoId);
+		const entrada = get(borradoresRepo.lista).find((b) => b.id === id);
+		if (!entrada) return;
+		const snap = instantanea();
+		if (snap === ultimoGuardado) return;
+		ultimoGuardado = snap;
+		try {
+			await borradoresRepo.guardar({ ...entrada, dr_paso: paso, dr_datos: datos });
+		} catch (e: any) {
+			toast.error(String(e?.message || e));
+		}
+	};
+
+	const programarAutoguardado = (activo: string | null) => {
+		if (!activo || instantanea() === ultimoGuardado) return;
+		if (autoguardadoPendiente) clearTimeout(autoguardadoPendiente);
+		autoguardadoPendiente = setTimeout(autoguardar, AUTOGUARDADO_MS);
+	};
+
+	$: (datos, paso, programarAutoguardado($borradorActivoId));
+
+	onDestroy(() => {
+		if (autoguardadoPendiente) {
+			clearTimeout(autoguardadoPendiente);
+			autoguardar();
+		}
+	});
 
 	$: totalPasos = schema?.total_pasos ?? 8;
 	$: pasoRevision = schema?.paso_revision?.indice ?? 8;
@@ -149,8 +190,11 @@
 	};
 
 	onMount(async () => {
+		// The wizard starts with a blank form; never autosave it over a draft edited earlier.
+		borradorActivoId.set(null);
 		try {
 			const status = await getDeclaracionStatus(token);
+			ttlBorradores = status.borradores_ttl_dias ?? ttlBorradores;
 			if (!status.available) {
 				errorMsg = $i18n.t(
 					'The declaration template is not available yet. Wait for the docs pack seed.'
@@ -211,6 +255,7 @@
 			// Revoking synchronously can abort the download in some browsers.
 			setTimeout(() => URL.revokeObjectURL(url), 1000);
 			toast.success($i18n.t('Declaration downloaded'));
+			if (get(borradorActivoId)) preguntarBorrarBorrador = true;
 		} catch (e: any) {
 			if (e instanceof ErroresValidacion) {
 				errores = e.errores;
@@ -228,7 +273,15 @@
 		paso = entrada.dr_paso || 1;
 		errores = [];
 		if (schema) aplicarIniciales(schema.pasos);
+		ultimoGuardado = instantanea();
 		if (paso === pasoRevision) await revisar();
+	};
+
+	const borrarBorradorActivo = async () => {
+		const id = get(borradorActivoId);
+		if (!id) return;
+		await borradoresRepo.eliminar(id);
+		toast.success($i18n.t('Draft deleted'));
 	};
 </script>
 
@@ -248,7 +301,13 @@
 			</div>
 		{/if}
 
-		<BorradoresPanel {datos} {paso} onCargar={onCargarBorrador} />
+		<BorradoresPanel
+			{datos}
+			{paso}
+			ttlDias={ttlBorradores}
+			onCargar={onCargarBorrador}
+			onGuardado={() => (ultimoGuardado = instantanea())}
+		/>
 
 		<div class="space-y-3">
 			<ol
@@ -366,3 +425,14 @@
 		</div>
 	</div>
 {/if}
+
+<ConfirmDialog
+	bind:show={preguntarBorrarBorrador}
+	title={$i18n.t('Keep the draft?')}
+	message={$i18n.t(
+		'The declaration has been generated. Do you want to keep this draft in your account or delete it?'
+	)}
+	cancelLabel={$i18n.t('Keep draft')}
+	confirmLabel={$i18n.t('Delete draft')}
+	onConfirm={borrarBorradorActivo}
+/>
