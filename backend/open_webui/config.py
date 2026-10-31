@@ -116,6 +116,13 @@ for file_path in (FRONTEND_BUILD_DIR / 'static').glob('**/*'):
         except Exception as e:
             logging.error(f'An error occurred: {e}')
 
+# Login hero media lives in DATA_DIR/auth (filled by webui-seed) and is mounted
+# at /static/auth in main.py — ensure the directory exists at startup.
+try:
+    (DATA_DIR / 'auth').mkdir(parents=True, exist_ok=True)
+except Exception as e:
+    logging.error(f'Could not create auth media directory: {e}')
+
 # LICENSE covers copied Open WebUI logo/favicon assets.
 # Do not alter, remove, obscure, or replace them except as LICENSE permits:
 # https://docs.openwebui.com/license.

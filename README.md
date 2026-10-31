@@ -16,7 +16,7 @@ Basado en [Open WebUI](https://github.com/open-webui/open-webui) (fork adaptado)
 
 ## Seed y documentación
 
-El servicio `webui-seed` (Docker Compose) descarga el ZIP de documentación (`SEED_DOCS_ZIP_URL`), crea Knowledge Bases, el modelo de workspace y deja el pack en `docs_pack`. El ZIP alimenta RAG, **mapa** (GDB → geo_cache) y **declaración** (DOCX editable → plantilla).
+El servicio `webui-seed` (Docker Compose) descarga el ZIP de documentación (`SEED_DOCS_ZIP_URL`), crea Knowledge Bases, el modelo de workspace y deja el pack en `docs_pack`. El ZIP alimenta RAG, **mapa** (GDB → geo_cache) y **declaración** (DOCX editable → plantilla). El mismo profile puede descargar el media de login (`SEED_AUTH_MEDIA_ZIP_URL` → `fondo.webp` / `fondo.mp4` en el volumen, servidos en `/static/auth/`).
 
 Flags principales: `ENABLE_MAPA=true`, `ENABLE_DECLARACION=true`. Tras el seed se regeneran geo_cache y la plantilla DR.
 

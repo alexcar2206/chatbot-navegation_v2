@@ -82,6 +82,7 @@ from open_webui.env import (
     AUDIT_LOG_LEVEL,
     BYPASS_MODEL_ACCESS_CONTROL,
     CHANGELOG,
+    DATA_DIR,
     DEPLOYMENT_ID,
     ENABLE_AUDIT_GET_REQUESTS,
     ENABLE_COMPRESSION_MIDDLEWARE,
@@ -3029,6 +3030,12 @@ async def check_db_health():
 mimetypes.add_type('text/javascript', '.js')
 mimetypes.add_type('text/javascript', '.mjs')
 mimetypes.add_type('application/wasm', '.wasm')
+
+# Login hero media from webui-seed (DATA_DIR/auth). Mount before /static so
+# /static/auth/* is served from the data volume without relying on symlinks.
+_auth_media_dir = DATA_DIR / 'auth'
+_auth_media_dir.mkdir(parents=True, exist_ok=True)
+app.mount('/static/auth', StaticFiles(directory=_auth_media_dir), name='auth-media')
 
 # Serve build-time static assets (CSS, JS, images, favicon, etc.)
 app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')

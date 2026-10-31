@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""First-boot seed: download docs ZIP, create Knowledge Bases + workspace model via Open WebUI API."""
+"""First-boot seed: download docs/auth ZIPs, create Knowledge Bases + workspace model via Open WebUI API."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -146,9 +147,17 @@ def model_exists(s: requests.Session, base: str, model_id: str) -> bool:
     return get_model(s, base, model_id) is not None
 
 
-def download_zip(url: str, dest: Path, expected_sha256: str = '') -> None:
-    """Download the ZIP; if ``expected_sha256`` is set, abort on mismatch."""
-    log.info('Downloading docs ZIP: %s', url)
+AUTH_MEDIA_MARKER = '.auth_media_sha256'
+AUTH_MEDIA_REQUIRED = ('fondo.webp', 'fondo.mp4')
+AUTH_MEDIA_OPTIONAL = ('fondo.webm',)
+
+
+def download_zip(url: str, dest: Path, expected_sha256: str = '') -> str:
+    """Download the ZIP; if ``expected_sha256`` is set, abort on mismatch.
+
+    Returns the lowercase hex SHA-256 of the downloaded bytes.
+    """
+    log.info('Downloading ZIP: %s', url)
     digest = hashlib.sha256()
     with requests.get(url, stream=True, timeout=600) as r:
         r.raise_for_status()
@@ -157,11 +166,13 @@ def download_zip(url: str, dest: Path, expected_sha256: str = '') -> None:
                 if chunk:
                     f.write(chunk)
                     digest.update(chunk)
-    log.info('Downloaded %s (%s bytes, sha256=%s)', dest, dest.stat().st_size, digest.hexdigest())
-    if expected_sha256 and digest.hexdigest().lower() != expected_sha256.lower():
+    hexdigest = digest.hexdigest()
+    log.info('Downloaded %s (%s bytes, sha256=%s)', dest, dest.stat().st_size, hexdigest)
+    if expected_sha256 and hexdigest.lower() != expected_sha256.lower():
         raise RuntimeError(
-            f'docs ZIP checksum mismatch: expected {expected_sha256}, got {digest.hexdigest()}'
+            f'ZIP checksum mismatch: expected {expected_sha256}, got {hexdigest}'
         )
+    return hexdigest.lower()
 
 
 def extract_zip(zip_path: Path, out_dir: Path) -> Path:
@@ -206,6 +217,72 @@ def ensure_docs_pack(zip_url: str, dest: Path, force: bool = False, expected_sha
         extract_dir.rename(dest)
 
     log.info('Persisted docs_pack at %s', dest)
+    return dest
+
+
+def auth_media_ready(path: Path, expected_sha256: str = '') -> bool:
+    """True when required auth files exist (and marker matches if sha is set)."""
+    if not path.is_dir():
+        return False
+    if not all((path / name).is_file() for name in AUTH_MEDIA_REQUIRED):
+        return False
+    if not expected_sha256:
+        return True
+    marker = path / AUTH_MEDIA_MARKER
+    if not marker.is_file():
+        return False
+    try:
+        return marker.read_text(encoding='utf-8').strip().lower() == expected_sha256.lower()
+    except OSError:
+        return False
+
+
+def _collect_auth_media_files(extract_dir: Path) -> dict[str, Path]:
+    """Map basename -> path for known auth media under extract_dir (any depth)."""
+    wanted = set(AUTH_MEDIA_REQUIRED) | set(AUTH_MEDIA_OPTIONAL)
+    found: dict[str, Path] = {}
+    for path in extract_dir.rglob('*'):
+        if path.is_file() and path.name in wanted and path.name not in found:
+            found[path.name] = path
+    return found
+
+
+def ensure_auth_media(
+    zip_url: str, dest: Path, force: bool = False, expected_sha256: str = ''
+) -> Path:
+    """Download/extract login hero media (fondo.webp + fondo.mp4[+webm]) into dest.
+
+    Writes ``.auth_media_sha256`` with the ZIP digest for idempotent re-runs.
+    """
+    if auth_media_ready(dest, expected_sha256=expected_sha256) and not force:
+        log.info('auth media already present at %s', dest)
+        return dest
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.auth-media-', dir=dest.parent) as tmp:
+        tmp_path = Path(tmp)
+        zip_path = tmp_path / 'auth-media.zip'
+        extract_dir = tmp_path / 'extract'
+        stage_dir = tmp_path / 'stage'
+        extract_dir.mkdir()
+        stage_dir.mkdir()
+        digest = download_zip(zip_url, zip_path, expected_sha256=expected_sha256)
+        extract_zip(zip_path, extract_dir)
+        found = _collect_auth_media_files(extract_dir)
+        missing = [name for name in AUTH_MEDIA_REQUIRED if name not in found]
+        if missing:
+            raise RuntimeError(f'auth media ZIP missing required files: {", ".join(missing)}')
+        for name, src in found.items():
+            shutil.copy2(src, stage_dir / name)
+        (stage_dir / AUTH_MEDIA_MARKER).write_text(digest + '\n', encoding='utf-8')
+
+        if dest.exists():
+            log.info('Replacing auth media at %s', dest)
+            old = tmp_path / 'previous'
+            dest.rename(old)
+        stage_dir.rename(dest)
+
+    log.info('Persisted auth media at %s (sha256=%s)', dest, digest)
     return dest
 
 
@@ -573,8 +650,28 @@ def regenerar_navegacion(s: requests.Session, base: str) -> None:
 
 def main() -> int:
     zip_url = os.getenv('SEED_DOCS_ZIP_URL', '').strip()
+    auth_zip_url = os.getenv('SEED_AUTH_MEDIA_ZIP_URL', '').strip()
+    if not zip_url and not auth_zip_url:
+        log.info('SEED_DOCS_ZIP_URL and SEED_AUTH_MEDIA_ZIP_URL empty — skipping seed')
+        return 0
+
+    force = env_bool('SEED_FORCE', False)
+    auth_media = Path(os.getenv('SEED_AUTH_MEDIA_PATH', '/data/auth'))
+
+    # Login hero media (independent of RAG marker / admin credentials).
+    if auth_zip_url:
+        try:
+            ensure_auth_media(
+                auth_zip_url,
+                auth_media,
+                force=force,
+                expected_sha256=os.getenv('SEED_AUTH_MEDIA_ZIP_SHA256', '').strip(),
+            )
+        except Exception as e:
+            log.warning('auth media persist failed (login will use SVG fallback): %s', e)
+
     if not zip_url:
-        log.info('SEED_DOCS_ZIP_URL empty — skipping seed')
+        log.info('SEED_DOCS_ZIP_URL empty — auth media done (skipping RAG seed)')
         return 0
 
     base = os.getenv('WEBUI_URL', 'http://open-webui:8080').rstrip('/')
@@ -586,7 +683,6 @@ def main() -> int:
     ollama_model_id = first_ollama_pull_model()
     marker = Path(os.getenv('SEED_MARKER_PATH', '/data/.seed_webui_complete'))
     docs_pack = Path(os.getenv('SEED_DOCS_PACK_PATH', '/data/docs_pack'))
-    force = env_bool('SEED_FORCE', False)
     wait_timeout = int(os.getenv('SEED_WAIT_TIMEOUT', '900'))
 
     # Persist pack for map geo even when RAG seed was already completed.

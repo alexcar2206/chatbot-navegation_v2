@@ -32,6 +32,10 @@ export default defineConfig({
 				changeOrigin: true,
 				ws: true
 			},
+			'/static': {
+				target: backendTarget,
+				changeOrigin: true
+			},
 			'/ollama': {
 				target: backendTarget,
 				changeOrigin: true
